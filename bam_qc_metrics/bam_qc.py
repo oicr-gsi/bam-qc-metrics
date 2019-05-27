@@ -7,12 +7,12 @@ import argparse, csv, json, re, pysam, sys
 class bam_qc:
 
     METADATA_KEYS = [
-        "barcode",
-        "instrument",
-        "lane",
-        "library",
-        "run name",
-        "sample"
+        'barcode',
+        'instrument',
+        'lane',
+        'library',
+        'run name',
+        'sample'
     ]
     
     def __init__(self, bam_path, metadata_path, ref_path):
@@ -20,28 +20,55 @@ class bam_qc:
         self.bam_path = bam_path
         self.ref_path = ref_path
         self.samtools_metrics = self.run_samtools()
-        print(self.samtools_metrics)
 
     def run_samtools(self):
         result = pysam.stats(self.bam_path)
-        # parse output from 'samtools stats', filtering out comment lines
         reader = csv.reader(
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
             delimiter="\t"
         )
-        # read some simple metrics
-        keys = ['RL', 'FRL', 'LRL']
-        metrics = {}
+        # read the summary numbers (SN)
+        # fields denoted in float_keys are floats; integers otherwise
+        summary_numbers = {}
+        float_keys = [
+            'error rate',
+            'average quality',
+            'insert size average',
+            'insert size standard deviation',
+            'percentage of properly paired reads (%)'
+        ]
+        # map from SN field names to output keys
+        key_map = {
+            'bases mapped (cigar)': 'bases mapped',
+            'average length': 'average read length',
+            'insert size average': 'insert mean',
+            'insert size standard deviation': 'insert stdev',
+            'reads mapped': 'mapped reads',
+            'reads mapped and paired': 'reads mapped and paired',
+            'mismatches': 'mismatched bases',
+            # 'reads paired' > 0 => 'paired end' = True
+            'reads paired': 'paired reads',
+            'pairs on different chromosomes': 'pairsMappedToDifferentChr',
+            'reads properly paired': 'properly paired reads',
+            'raw total sequences': 'total reads',
+            'reads unmapped': 'unmapped reads'
+        }
         for row in reader:
-            if row[0] in keys:
-                metrics[row[0]] = [int(n) for n in row[1:]]
-        return metrics
+            if row[0] == 'SN':
+                samtools_key = re.sub(':$', '', row[1])
+                if samtools_key not in key_map: continue
+                if samtools_key in float_keys: val = float(row[2])
+                else: val = int(row[2])
+                summary_numbers[key_map[samtools_key]] = val
+        summary_numbers['paired end'] = summary_numbers['paired reads'] > 0
+        return summary_numbers
         
     def write_output(self, out_path):
         output = {}
         for key in self.METADATA_KEYS:
             output[key] = self.metadata.get(key)
-        out_file = None
+        for key in self.samtools_metrics.keys():
+            output[key] = self.samtools_metrics.get(key)
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
