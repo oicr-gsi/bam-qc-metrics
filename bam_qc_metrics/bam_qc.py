@@ -49,7 +49,8 @@ class bam_qc:
             'pairs on different chromosomes': 'pairsMappedToDifferentChr',
             'reads properly paired': 'properly paired reads',
             'raw total sequences': 'total reads',
-            'reads unmapped': 'unmapped reads'
+            'reads unmapped': 'unmapped reads',
+            'non-primary alignments': 'non primary reads',
         }
         samtools_stats = {}
         samtools_stats['inserted bases'] = 0
