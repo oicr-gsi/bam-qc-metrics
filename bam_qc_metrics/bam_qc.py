@@ -15,11 +15,71 @@ class bam_qc:
         'sample'
     ]
     
-    def __init__(self, bam_path, metadata_path, ref_path):
+    def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None):
         with open(metadata_path) as f: self.metadata = json.loads(f.read())
         self.bam_path = bam_path
-        self.ref_path = ref_path
+        self.target_path = target_path
         self.samtools_metrics = self.run_samtools()
+        self.mark_duplicates_metrics = {
+            "ESTIMATED_LIBRARY_SIZE": None,
+            "HISTOGRAM": {},
+            "LIBRARY": None,
+            "PERCENT_DUPLICATION": None,
+            "READ_PAIRS_EXAMINED": None,
+            "READ_PAIR_DUPLICATES": None,
+            "READ_PAIR_OPTICAL_DUPLICATES": None,
+            "UNMAPPED_READS": None,
+            "UNPAIRED_READS_EXAMINED": None,
+            "UNPAIRED_READ_DUPLICATES": None
+        }
+        if mark_duplicates_path != None:
+            self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
+
+    def read_mark_duplicates_metrics(self, input_path):
+        section = 0
+        line_count = 0
+        with open(input_path) as f: lines = f.readlines()
+        keys = []
+        values = []
+        hist = {}
+        for line in lines:
+            line_count += 1
+            line = line.strip()
+            if re.match('## METRICS CLASS\s+net\.sf\.picard\.sam\.DuplicationMetrics', line):
+                section += 1
+            elif section == 1:
+                keys = re.split("\t", line)
+                section += 1
+            elif section == 2:
+                values = re.split("\t", line)
+                section += 1
+            elif section == 3 and re.match('## HISTOGRAM', line):
+                section += 1
+            elif section == 4 and re.match("BIN\tVALUE", line):
+                section += 1
+            elif section == 5 and re.match("[0-9]+\.[0-9]+\t[0-9]+\.{0,1}[0-9]*$", line):
+                terms = re.split("\t", line)
+                # JSON doesn't allow numeric dictionary keys, so hist_bin is stringified in output
+                hist_bin = round(float(terms[0])) if re.search('\.0$', terms[0]) else terms[0]
+                hist[hist_bin] = float(terms[1])
+            elif re.match('#', line) and section < 4 or line == '':
+                continue
+            else:
+                params = (input_path, section, line)
+                msg = "Failed to parse duplicate metrics path %s, section %d, line %d" % params
+                raise ValueError(msg)
+        if len(keys) != len(values):
+            raise ValueError("Key and value lists from %s are of unequal length" % input_path)
+        metrics = {}
+        for i in range(len(keys)):
+            if keys[i] == 'PERCENT_DUPLICATION':
+                metrics[keys[i]] = float(values[i])
+            elif keys[i] == 'LIBRARY':
+                metrics[keys[i]] = values[i]
+            else:
+                metrics[keys[i]] = int(values[i])
+        metrics['HISTOGRAM'] = hist
+        return metrics
 
     def run_samtools(self):
         result = pysam.stats(self.bam_path)
@@ -84,6 +144,7 @@ class bam_qc:
             output[key] = self.metadata.get(key)
         for key in self.samtools_metrics.keys():
             output[key] = self.samtools_metrics.get(key)
+        output['mark duplicates'] = self.mark_duplicates_metrics
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
@@ -95,16 +156,19 @@ class bam_qc:
 
 def main():
     parser = argparse.ArgumentParser(description='QC for BAM files.')
-    parser.add_argument('-b', '--bam', metavar='PATH',
-                        help='Path to input BAM file')
+    parser.add_argument('-b', '--bam', metavar='PATH', required=True,
+                        help='Path to input BAM file. Required.')
+    parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
+                        help='Path to text file output by Picard MarkDuplicates. Optional.')
     parser.add_argument('-m', '--metadata', metavar='PATH',
-                        help='Path to JSON file containing metadata')
+                        help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-o', '--out', metavar='PATH',
                         help='Path for JSON output, or - for STDOUT')
-    parser.add_argument('-r', '--reference', metavar='PATH',
-                        help='Path to reference BED file')
+    parser.add_argument('-t', '--target', metavar='PATH',
+                        help='Path to target BED file, containing targets to calculate coverage '+\
+                        'against. Optional; if given, must be sorted in same order as BAM file.')
     args = parser.parse_args()
-    qc = bam_qc(args.bam, args.metadata, args.reference)
+    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
