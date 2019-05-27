@@ -60,6 +60,7 @@ class bam_qc:
             elif section == 5 and re.match("[0-9]+\.[0-9]+\t[0-9]+\.{0,1}[0-9]*$", line):
                 terms = re.split("\t", line)
                 # JSON doesn't allow numeric dictionary keys, so hist_bin is stringified in output
+                # but rounding removes the trailing '.0'
                 hist_bin = round(float(terms[0])) if re.search('\.0$', terms[0]) else terms[0]
                 hist[hist_bin] = float(terms[1])
             elif re.match('#', line) and section < 4 or line == '':
@@ -115,22 +116,25 @@ class bam_qc:
         samtools_stats = {}
         samtools_stats['inserted bases'] = 0
         samtools_stats['deleted bases'] = 0
+        samtools_stats['insert size histogram'] = {}
         read_len = {'total': 0, 'count': 0}
         for row in reader:
-            if row[0] == 'SN':
-                samtools_key = re.sub(':$', '', row[1])
-                if samtools_key not in key_map: continue
-                if samtools_key in float_keys: val = float(row[2])
-                else: val = int(row[2])
-                samtools_stats[key_map[samtools_key]] = val
-            elif row[0] == 'ID':
+            if row[0] == 'ID':
                 samtools_stats['inserted bases'] += int(row[1]) * int(row[2])
                 samtools_stats['deleted bases'] += int(row[1]) * int(row[3])
+            elif row[0] == 'IS':
+                samtools_stats['insert size histogram'][int(row[1])] = int(row[2])
             elif row[0] == 'RL':
                 length = int(row[1])
                 count = int(row[2])
                 read_len['total'] += length * count
                 read_len['count'] += count
+            elif row[0] == 'SN':
+                samtools_key = re.sub(':$', '', row[1])
+                if samtools_key not in key_map: continue
+                if samtools_key in float_keys: val = float(row[2])
+                else: val = int(row[2])
+                samtools_stats[key_map[samtools_key]] = val
         samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
         if read_len['count'] > 0:
             samtools_stats['average read length'] = float(read_len['total']) / read_len['count']
