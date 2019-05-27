@@ -27,9 +27,7 @@ class bam_qc:
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
             delimiter="\t"
         )
-        # read the summary numbers (SN)
-        # fields denoted in float_keys are floats; integers otherwise
-        summary_numbers = {}
+        # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
         float_keys = [
             'error rate',
             'average quality',
@@ -53,15 +51,21 @@ class bam_qc:
             'raw total sequences': 'total reads',
             'reads unmapped': 'unmapped reads'
         }
+        samtools_stats = {}
+        samtools_stats['inserted bases'] = 0
+        samtools_stats['deleted bases'] = 0
         for row in reader:
             if row[0] == 'SN':
                 samtools_key = re.sub(':$', '', row[1])
                 if samtools_key not in key_map: continue
                 if samtools_key in float_keys: val = float(row[2])
                 else: val = int(row[2])
-                summary_numbers[key_map[samtools_key]] = val
-        summary_numbers['paired end'] = summary_numbers['paired reads'] > 0
-        return summary_numbers
+                samtools_stats[key_map[samtools_key]] = val
+            elif row[0] == 'ID':
+                samtools_stats['inserted bases'] += int(row[2])
+                samtools_stats['deleted bases'] += int(row[3])
+        samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
+        return samtools_stats
         
     def write_output(self, out_path):
         output = {}
