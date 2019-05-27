@@ -54,6 +54,7 @@ class bam_qc:
         samtools_stats = {}
         samtools_stats['inserted bases'] = 0
         samtools_stats['deleted bases'] = 0
+        read_len = {'total': 0, 'count': 0}
         for row in reader:
             if row[0] == 'SN':
                 samtools_key = re.sub(':$', '', row[1])
@@ -62,9 +63,18 @@ class bam_qc:
                 else: val = int(row[2])
                 samtools_stats[key_map[samtools_key]] = val
             elif row[0] == 'ID':
-                samtools_stats['inserted bases'] += int(row[2])
-                samtools_stats['deleted bases'] += int(row[3])
+                samtools_stats['inserted bases'] += int(row[1]) * int(row[2])
+                samtools_stats['deleted bases'] += int(row[1]) * int(row[3])
+            elif row[0] == 'RL':
+                length = int(row[1])
+                count = int(row[2])
+                read_len['total'] += length * count
+                read_len['count'] += count
         samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
+        if read_len['count'] > 0:
+            samtools_stats['average read length'] = float(read_len['total']) / read_len['count']
+        else:
+            samtools_stats['average read length'] = None
         return samtools_stats
         
     def write_output(self, out_path):
