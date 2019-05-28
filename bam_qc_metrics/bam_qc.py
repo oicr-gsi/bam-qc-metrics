@@ -215,6 +215,8 @@ class bam_qc:
         for key in self.samtools_metrics.keys():
             output[key] = self.samtools_metrics.get(key)
         output['mark duplicates'] = self.mark_duplicates_metrics
+        output['target'] = os.path.abspath(self.target_path)
+        output['target_size'] = None # TODO placeholder; find with pybedtools
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
