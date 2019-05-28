@@ -18,7 +18,8 @@ class test(unittest.TestCase):
         with (open(expected_path)) as f: self.expected = json.loads(f.read())
         
     def test(self):
-        qc = bam_qc(self.bam_path, self.target_path, self.metadata_path, self.markdup_path)
+        quality = 30
+        qc = bam_qc(self.bam_path, self.target_path, self.metadata_path, self.markdup_path, quality)
         out_path = os.path.join(self.tmpdir, 'out.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))

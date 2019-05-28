@@ -15,11 +15,11 @@ class bam_qc:
         'sample'
     ]
     
-    def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None):
+    def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
+                 trim_quality=None):
         with open(metadata_path) as f: self.metadata = json.loads(f.read())
         self.bam_path = bam_path
         self.target_path = target_path
-        self.samtools_metrics = self.run_samtools()
         self.mark_duplicates_metrics = {
             "ESTIMATED_LIBRARY_SIZE": None,
             "HISTOGRAM": {},
@@ -34,6 +34,41 @@ class bam_qc:
         }
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
+        self.trim_quality = trim_quality
+        self.samtools_metrics = self.run_samtools()
+
+    def fq_stats(self, rows, precision=6):
+        '''
+        Compute quality metrics from either FFQ or LFQ entries in samtools stats:
+            - Mean quality by cycle
+            - Quality histogram
+        '''
+        meanByCyc = {}
+        max_width = max([len(row) for row in rows])
+        histogram = {q: 0 for q in range(max_width-2)}
+        for row in rows:
+            cycle = int(row[1])
+            counts = [int(n) for n in row[2:]]
+            total = 0
+            count = 0
+            for qscore in range(len(counts)):
+                total += counts[qscore]*qscore
+                count += counts[qscore]
+                histogram[qscore] += counts[qscore]
+            meanByCyc[cycle] = round(float(total) / count, precision) if count > 0 else 0
+        return (meanByCyc, histogram)
+
+    def mean_read_length(self, rows):
+        '''Process RL (read length) rows'''
+        total = 0
+        count = 0
+        for row in rows:
+            length = int(row[1])
+            length_count = int(row[2])
+            total += length * length_count
+            count += length_count
+        mean_rl = float(total) / count if count > 0 else 0
+        return mean_rl
 
     def read_mark_duplicates_metrics(self, input_path):
         section = 0
@@ -83,7 +118,10 @@ class bam_qc:
         return metrics
 
     def run_samtools(self):
-        result = pysam.stats(self.bam_path)
+        if self.trim_quality == None:
+            result = pysam.stats(self.bam_path)
+        else:
+            result = pysam.stats("-q", str(self.trim_quality), self.bam_path)
         reader = csv.reader(
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
             delimiter="\t"
@@ -118,17 +156,21 @@ class bam_qc:
         samtools_stats['deleted bases'] = 0
         samtools_stats['insert size histogram'] = {}
         read_len = {'total': 0, 'count': 0}
+        ffq_rows = []
+        lfq_rows = []
+        rl_rows = []
         for row in reader:
-            if row[0] == 'ID':
+            if row[0] == 'FFQ':
+                ffq_rows.append(row)
+            elif row[0] == 'ID':
                 samtools_stats['inserted bases'] += int(row[1]) * int(row[2])
                 samtools_stats['deleted bases'] += int(row[1]) * int(row[3])
             elif row[0] == 'IS':
                 samtools_stats['insert size histogram'][int(row[1])] = int(row[2])
+            elif row[0] == 'LFQ':
+                lfq_rows.append(row)
             elif row[0] == 'RL':
-                length = int(row[1])
-                count = int(row[2])
-                read_len['total'] += length * count
-                read_len['count'] += count
+                rl_rows.append(row)
             elif row[0] == 'SN':
                 samtools_key = re.sub(':$', '', row[1])
                 if samtools_key not in key_map: continue
@@ -136,10 +178,13 @@ class bam_qc:
                 else: val = int(row[2])
                 samtools_stats[key_map[samtools_key]] = val
         samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
-        if read_len['count'] > 0:
-            samtools_stats['average read length'] = float(read_len['total']) / read_len['count']
-        else:
-            samtools_stats['average read length'] = None
+        samtools_stats['average read length'] = self.mean_read_length(rl_rows)
+        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
+        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
+        samtools_stats['read 1 quality by cycle'] = ffq_mean_by_cycle
+        samtools_stats['read 1 quality histogram'] = ffq_histogram
+        samtools_stats['read 2 quality by cycle'] = lfq_mean_by_cycle
+        samtools_stats['read 2 quality histogram'] = lfq_histogram
         return samtools_stats
         
     def write_output(self, out_path):
@@ -168,11 +213,24 @@ def main():
                         help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-o', '--out', metavar='PATH',
                         help='Path for JSON output, or - for STDOUT')
+    parser.add_argument('-q', '--trim-quality', metavar='QSCORE',
+                        help='Samtools threshold for trimming alignment quality. Optional.')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
     args = parser.parse_args()
-    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates)
+    q_threshold = None
+    if args.trim_quality != None:
+        try:
+            q_threshold = int(args.trim_quality)
+        except ValueError:
+            sys.stderr.write("ERROR: Quality must be an integer.\n")
+            exit(1)
+        if q_threshold < 0:
+            sys.stderr.write("ERROR: Quality cannot be negative.\n")
+            exit(1)
+
+    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, q_threshold)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
