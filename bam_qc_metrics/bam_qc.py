@@ -190,8 +190,11 @@ class bam_qc:
                 if samtools_key in float_keys: val = float(row[2])
                 else: val = int(row[2])
                 samtools_stats[key_map[samtools_key]] = val
-        samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
         samtools_stats['average read length'] = self.mean_read_length(rl_rows)
+        samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
+        samtools_stats['qual cut'] = self.trim_quality
+        samtools_stats['qual fail reads'] = int(pysam.view('-c', self.bam_path)) \
+                                            - samtools_stats['mapped reads']
         samtools_stats['read 1 average length'] = self.mean_read_length(frl_rows)
         samtools_stats['read 2 average length'] = self.mean_read_length(lrl_rows)
         samtools_stats['read 1 length histogram'] = self.read_length_histogram(frl_rows)
@@ -202,6 +205,7 @@ class bam_qc:
         samtools_stats['read 1 quality histogram'] = ffq_histogram
         samtools_stats['read 2 quality by cycle'] = lfq_mean_by_cycle
         samtools_stats['read 2 quality histogram'] = lfq_histogram
+
         return samtools_stats
         
     def write_output(self, out_path):
