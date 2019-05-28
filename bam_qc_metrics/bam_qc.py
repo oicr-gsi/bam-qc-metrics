@@ -59,7 +59,7 @@ class bam_qc:
         return (meanByCyc, histogram)
 
     def mean_read_length(self, rows):
-        '''Process RL (read length) rows'''
+        '''Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length'''
         total = 0
         count = 0
         for row in rows:
@@ -70,6 +70,13 @@ class bam_qc:
         mean_rl = float(total) / count if count > 0 else 0
         return mean_rl
 
+    def read_length_histogram(self, rows):
+        '''Process RL (read length), FRL (first RL) or LRL (last RL) rows for read length histogram'''
+        histogram = {}
+        for row in rows:
+            histogram[int(row[1])] = int(row[2])
+        return histogram
+    
     def read_mark_duplicates_metrics(self, input_path):
         section = 0
         line_count = 0
@@ -187,6 +194,8 @@ class bam_qc:
         samtools_stats['average read length'] = self.mean_read_length(rl_rows)
         samtools_stats['read 1 average length'] = self.mean_read_length(frl_rows)
         samtools_stats['read 2 average length'] = self.mean_read_length(lrl_rows)
+        samtools_stats['read 1 length histogram'] = self.read_length_histogram(frl_rows)
+        samtools_stats['read 2 length histogram'] = self.read_length_histogram(lrl_rows)
         (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
         (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
         samtools_stats['read 1 quality by cycle'] = ffq_mean_by_cycle
