@@ -2,7 +2,7 @@
 
 """Main script and class to compute BAM QC metrics"""
 
-import argparse, csv, json, re, pysam, sys
+import argparse, csv, json, os, re, pysam, sys
 
 class bam_qc:
 
@@ -211,8 +211,8 @@ def main():
                         help='Path to text file output by Picard MarkDuplicates. Optional.')
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='Path to JSON file containing metadata. Optional.')
-    parser.add_argument('-o', '--out', metavar='PATH',
-                        help='Path for JSON output, or - for STDOUT')
+    parser.add_argument('-o', '--out', metavar='PATH', required=True,
+                        help='Path for JSON output, or - for STDOUT. Required.')
     parser.add_argument('-q', '--trim-quality', metavar='QSCORE',
                         help='Samtools threshold for trimming alignment quality. Optional.')
     parser.add_argument('-t', '--target', metavar='PATH',
@@ -228,6 +228,30 @@ def main():
             exit(1)
         if q_threshold < 0:
             sys.stderr.write("ERROR: Quality cannot be negative.\n")
+            exit(1)
+    input_paths_ok = True
+    for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
+        if path_arg == None:
+            continue
+        if not os.path.exists(path_arg):
+            sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
+            input_paths_ok = False
+        elif not os.path.isfile(path_arg):
+            sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
+            input_paths_ok = False
+        elif not os.access(path_arg, os.R_OK):
+            sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
+            input_paths_ok = False
+    if not input_paths_ok:
+        exit(1)
+    if args.out != '-':
+        # ugly but robust Python idiom to resolve path of parent directory
+        parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
+        if not os.path.isdir(parent_path):
+            sys.stderr.write("ERROR: Parent of %s is not a directory.\n" % args.out)
+            exit(1)
+        elif not os.access(parent_path, os.W_OK):
+            sys.stderr.write("ERROR: Parent directory of %s is not writable.\n" % args.out)
             exit(1)
 
     qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, q_threshold)
