@@ -159,9 +159,13 @@ class bam_qc:
         ffq_rows = []
         lfq_rows = []
         rl_rows = []
+        frl_rows = []
+        lrl_rows = []
         for row in reader:
             if row[0] == 'FFQ':
                 ffq_rows.append(row)
+            elif row[0] == 'FRL':
+                frl_rows.append(row)
             elif row[0] == 'ID':
                 samtools_stats['inserted bases'] += int(row[1]) * int(row[2])
                 samtools_stats['deleted bases'] += int(row[1]) * int(row[3])
@@ -169,6 +173,8 @@ class bam_qc:
                 samtools_stats['insert size histogram'][int(row[1])] = int(row[2])
             elif row[0] == 'LFQ':
                 lfq_rows.append(row)
+            elif row[0] == 'LRL':
+                lrl_rows.append(row)
             elif row[0] == 'RL':
                 rl_rows.append(row)
             elif row[0] == 'SN':
@@ -179,6 +185,8 @@ class bam_qc:
                 samtools_stats[key_map[samtools_key]] = val
         samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
         samtools_stats['average read length'] = self.mean_read_length(rl_rows)
+        samtools_stats['read 1 average length'] = self.mean_read_length(frl_rows)
+        samtools_stats['read 2 average length'] = self.mean_read_length(lrl_rows)
         (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
         (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
         samtools_stats['read 1 quality by cycle'] = ffq_mean_by_cycle
