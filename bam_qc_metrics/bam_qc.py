@@ -193,6 +193,7 @@ class bam_qc:
         samtools_stats['average read length'] = self.mean_read_length(rl_rows)
         samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
         samtools_stats['qual cut'] = self.trim_quality
+        # TODO pysam.view may have to be adjusted for downsampling
         samtools_stats['qual fail reads'] = int(pysam.view('-c', self.bam_path)) \
                                             - samtools_stats['mapped reads']
         samtools_stats['read 1 average length'] = self.mean_read_length(frl_rows)
@@ -205,7 +206,6 @@ class bam_qc:
         samtools_stats['read 1 quality histogram'] = ffq_histogram
         samtools_stats['read 2 quality by cycle'] = lfq_mean_by_cycle
         samtools_stats['read 2 quality histogram'] = lfq_histogram
-
         return samtools_stats
         
     def write_output(self, out_path):
@@ -226,6 +226,41 @@ class bam_qc:
             out_file.close()
 
 
+def validate_args(args):
+    valid = True
+    q_threshold = None
+    if args.trim_quality != None:
+        try:
+            q_threshold = int(args.trim_quality)
+        except ValueError:
+            sys.stderr.write("ERROR: Quality must be an integer.\n")
+            valid = False
+        if q_threshold < 0:
+            sys.stderr.write("ERROR: Quality cannot be negative.\n")
+            valid = False
+    for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
+        if path_arg == None:
+            continue
+        if not os.path.exists(path_arg):
+            sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
+            valid = False
+        elif not os.path.isfile(path_arg):
+            sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
+            valid = False
+        elif not os.access(path_arg, os.R_OK):
+            sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
+            valid = False
+    if args.out != '-':
+        # ugly but robust Python idiom to resolve path of parent directory
+        parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
+        if not os.path.isdir(parent_path):
+            sys.stderr.write("ERROR: Parent of %s is not a directory.\n" % args.out)
+            valid = False
+        elif not os.access(parent_path, os.W_OK):
+            sys.stderr.write("ERROR: Parent directory of %s is not writable.\n" % args.out)
+            valid = False
+    return valid
+
 def main():
     parser = argparse.ArgumentParser(description='QC for BAM files.')
     parser.add_argument('-b', '--bam', metavar='PATH', required=True,
@@ -242,42 +277,8 @@ def main():
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
     args = parser.parse_args()
-    q_threshold = None
-    if args.trim_quality != None:
-        try:
-            q_threshold = int(args.trim_quality)
-        except ValueError:
-            sys.stderr.write("ERROR: Quality must be an integer.\n")
-            exit(1)
-        if q_threshold < 0:
-            sys.stderr.write("ERROR: Quality cannot be negative.\n")
-            exit(1)
-    input_paths_ok = True
-    for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
-        if path_arg == None:
-            continue
-        if not os.path.exists(path_arg):
-            sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
-            input_paths_ok = False
-        elif not os.path.isfile(path_arg):
-            sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
-            input_paths_ok = False
-        elif not os.access(path_arg, os.R_OK):
-            sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
-            input_paths_ok = False
-    if not input_paths_ok:
-        exit(1)
-    if args.out != '-':
-        # ugly but robust Python idiom to resolve path of parent directory
-        parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
-        if not os.path.isdir(parent_path):
-            sys.stderr.write("ERROR: Parent of %s is not a directory.\n" % args.out)
-            exit(1)
-        elif not os.access(parent_path, os.W_OK):
-            sys.stderr.write("ERROR: Parent directory of %s is not writable.\n" % args.out)
-            exit(1)
-
-    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, q_threshold)
+    if not validate_args(args): exit(1)
+    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, int(args.trim_quality))
     qc.write_output(args.out)
 
 if __name__ == "__main__":
