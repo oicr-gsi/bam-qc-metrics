@@ -35,7 +35,33 @@ class bam_qc:
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.trim_quality = trim_quality
-        self.samtools_metrics = self.run_samtools()
+        self.samtools_metrics = self.evaluate_samtools_metrics()
+        read1_length = max(self.samtools_metrics['read 1 length histogram'].keys())
+        read2_length = max(self.samtools_metrics['read 2 length histogram'].keys())
+        self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
+
+    def evaluate_custom_metrics(self, read1_length, read2_length):
+        '''Iterate over the BAM file to compute custom metrics'''
+        metrics = { 'hard clip bases':0, 'soft clip bases':0 }
+        op_names = ['aligned', 'insertion', 'deletion', 'soft clip', 'hard clip']
+        read_lengths = [read1_length, read2_length]
+        for op_name in op_names:
+            for i in [0, 1]:
+                key = 'read %d %s by cycle' % (i+1, op_name)
+                metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
+        for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
+            cycle = 0
+            for (op, length) in read.cigartuples:
+                if op in [0,1,2,4,5]:
+                    for i in range(length):
+                        if op != 2: cycle += 1 # do not increment cycle for deletions
+                        if op == 4: metrics['soft clip'] += length
+                        elif op == 5: metrics['hard clip'] += length
+                        if read.is_read1: metrics['read 1 '+op_names[op]+' by cycle'][cycle] += 1
+                        if read.is_read2: metrics['read 2 '+op_names[op]+' by cycle'][cycle] += 1
+                else:
+                    cycle += length
+        return metrics
 
     def fq_stats(self, rows, precision=6):
         '''
@@ -124,7 +150,8 @@ class bam_qc:
         metrics['HISTOGRAM'] = hist
         return metrics
 
-    def run_samtools(self):
+    def evaluate_samtools_metrics(self):
+        '''Process metrics derived from samtools output'''
         if self.trim_quality == None:
             result = pysam.stats(self.bam_path)
         else:
@@ -158,10 +185,10 @@ class bam_qc:
             'reads unmapped': 'unmapped reads',
             'non-primary alignments': 'non primary reads',
         }
-        samtools_stats = {}
-        samtools_stats['inserted bases'] = 0
-        samtools_stats['deleted bases'] = 0
-        samtools_stats['insert size histogram'] = {}
+        metrics = {}
+        metrics['inserted bases'] = 0
+        metrics['deleted bases'] = 0
+        metrics['insert size histogram'] = {}
         read_len = {'total': 0, 'count': 0}
         ffq_rows = []
         lfq_rows = []
@@ -174,10 +201,10 @@ class bam_qc:
             elif row[0] == 'FRL':
                 frl_rows.append(row)
             elif row[0] == 'ID':
-                samtools_stats['inserted bases'] += int(row[1]) * int(row[2])
-                samtools_stats['deleted bases'] += int(row[1]) * int(row[3])
+                metrics['inserted bases'] += int(row[1]) * int(row[2])
+                metrics['deleted bases'] += int(row[1]) * int(row[3])
             elif row[0] == 'IS':
-                samtools_stats['insert size histogram'][int(row[1])] = int(row[2])
+                metrics['insert size histogram'][int(row[1])] = int(row[2])
             elif row[0] == 'LFQ':
                 lfq_rows.append(row)
             elif row[0] == 'LRL':
@@ -189,24 +216,24 @@ class bam_qc:
                 if samtools_key not in key_map: continue
                 if samtools_key in float_keys: val = float(row[2])
                 else: val = int(row[2])
-                samtools_stats[key_map[samtools_key]] = val
-        samtools_stats['average read length'] = self.mean_read_length(rl_rows)
-        samtools_stats['paired end'] = samtools_stats['paired reads'] > 0
-        samtools_stats['qual cut'] = self.trim_quality
+                metrics[key_map[samtools_key]] = val
+        metrics['average read length'] = self.mean_read_length(rl_rows)
+        metrics['paired end'] = metrics['paired reads'] > 0
+        metrics['qual cut'] = self.trim_quality
         # TODO pysam.view may have to be adjusted for downsampling
-        samtools_stats['qual fail reads'] = int(pysam.view('-c', self.bam_path)) \
-                                            - samtools_stats['mapped reads']
-        samtools_stats['read 1 average length'] = self.mean_read_length(frl_rows)
-        samtools_stats['read 2 average length'] = self.mean_read_length(lrl_rows)
-        samtools_stats['read 1 length histogram'] = self.read_length_histogram(frl_rows)
-        samtools_stats['read 2 length histogram'] = self.read_length_histogram(lrl_rows)
+        metrics['qual fail reads'] = int(pysam.view('-c', self.bam_path)) \
+                                            - metrics['mapped reads']
+        metrics['read 1 average length'] = self.mean_read_length(frl_rows)
+        metrics['read 2 average length'] = self.mean_read_length(lrl_rows)
+        metrics['read 1 length histogram'] = self.read_length_histogram(frl_rows)
+        metrics['read 2 length histogram'] = self.read_length_histogram(lrl_rows)
         (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
         (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
-        samtools_stats['read 1 quality by cycle'] = ffq_mean_by_cycle
-        samtools_stats['read 1 quality histogram'] = ffq_histogram
-        samtools_stats['read 2 quality by cycle'] = lfq_mean_by_cycle
-        samtools_stats['read 2 quality histogram'] = lfq_histogram
-        return samtools_stats
+        metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
+        metrics['read 1 quality histogram'] = ffq_histogram
+        metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
+        metrics['read 2 quality histogram'] = lfq_histogram
+        return metrics
         
     def write_output(self, out_path):
         output = {}
@@ -214,6 +241,8 @@ class bam_qc:
             output[key] = self.metadata.get(key)
         for key in self.samtools_metrics.keys():
             output[key] = self.samtools_metrics.get(key)
+        for key in self.custom_metrics.keys():
+            output[key] = self.custom_metrics.get(key)
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['target'] = os.path.abspath(self.target_path)
         output['target_size'] = None # TODO placeholder; find with pybedtools
