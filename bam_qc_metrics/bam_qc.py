@@ -259,14 +259,14 @@ class bam_qc:
 
 def validate_args(args):
     valid = True
-    q_threshold = None
     if args.trim_quality != None:
+        q_threshold = None
         try:
             q_threshold = int(args.trim_quality)
         except ValueError:
             sys.stderr.write("ERROR: Quality must be an integer.\n")
             valid = False
-        if q_threshold < 0:
+        if q_threshold != None and q_threshold < 0:
             sys.stderr.write("ERROR: Quality cannot be negative.\n")
             valid = False
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
