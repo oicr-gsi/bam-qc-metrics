@@ -42,7 +42,7 @@ class bam_qc:
 
     def evaluate_custom_metrics(self, read1_length, read2_length):
         '''Iterate over the BAM file to compute custom metrics'''
-        metrics = { 'hard clip bases':0, 'soft clip bases':0 }
+        metrics = { 'hard clip bases':0, 'soft clip bases':0, 'readsMissingMDtags':0 }
         op_names = ['aligned', 'insertion', 'deletion', 'soft clip', 'hard clip']
         read_lengths = [read1_length, read2_length]
         for op_name in op_names:
@@ -50,6 +50,8 @@ class bam_qc:
                 key = 'read %d %s by cycle' % (i+1, op_name)
                 metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
         for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
+            if not read.has_tag('MD'):
+                metrics['readsMissingMDtags'] += 1
             cycle = 0
             for (op, length) in read.cigartuples:
                 if op in [0,1,2,4,5]:
