@@ -42,7 +42,13 @@ class bam_qc:
 
     def evaluate_custom_metrics(self, read1_length, read2_length):
         '''Iterate over the BAM file to compute custom metrics'''
-        metrics = { 'hard clip bases':0, 'soft clip bases':0, 'readsMissingMDtags':0 }
+        metrics = {
+            'hard clip bases': 0,
+            'soft clip bases': 0,
+            'readsMissingMDtags': 0,
+            'qual cut': self.trim_quality,
+            'qual fail reads': 0
+        }
         op_names = ['aligned', 'insertion', 'deletion', 'soft clip', 'hard clip']
         read_lengths = [read1_length, read2_length]
         for op_name in op_names:
@@ -50,6 +56,9 @@ class bam_qc:
                 key = 'read %d %s by cycle' % (i+1, op_name)
                 metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
         for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
+            if self.trim_quality != None and read.mapping_quality < self.trim_quality:
+                metrics['qual fail reads'] += 1
+                continue
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
             cycle = 0
@@ -63,6 +72,87 @@ class bam_qc:
                         if read.is_read2: metrics['read 2 '+op_names[op]+' by cycle'][cycle] += 1
                 else:
                     cycle += length
+        return metrics
+
+    def evaluate_samtools_metrics(self):
+        '''Process metrics derived from samtools output'''
+        # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
+        float_keys = [
+            'error rate',
+            'average quality',
+            'insert size average',
+            'insert size standard deviation',
+            'percentage of properly paired reads (%)'
+        ]
+        # map from SN field names to output keys
+        key_map = {
+            'bases mapped (cigar)': 'bases mapped',
+            'average length': 'average read length',
+            'insert size average': 'insert mean',
+            'insert size standard deviation': 'insert stdev',
+            'reads mapped': 'mapped reads',
+            'reads mapped and paired': 'reads mapped and paired',
+            'mismatches': 'mismatched bases',
+            # 'reads paired' > 0 => 'paired end' = True
+            'reads paired': 'paired reads',
+            'pairs on different chromosomes': 'pairsMappedToDifferentChr',
+            'reads properly paired': 'properly paired reads',
+            'raw total sequences': 'total reads',
+            'reads unmapped': 'unmapped reads',
+            'non-primary alignments': 'non primary reads',
+        }
+        metrics = {}
+        metrics['inserted bases'] = 0
+        metrics['deleted bases'] = 0
+        metrics['insert size histogram'] = {}
+        read_len = {'total': 0, 'count': 0}
+        ffq_rows = []
+        lfq_rows = []
+        rl_rows = []
+        frl_rows = []
+        lrl_rows = []
+        if self.trim_quality == None:
+            result = pysam.stats(self.bam_path)
+        else:
+            result = pysam.stats("-q", str(self.trim_quality), self.bam_path)
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
+            delimiter="\t"
+        )
+        for row in reader:
+            if row[0] == 'FFQ':
+                ffq_rows.append(row)
+            elif row[0] == 'FRL':
+                frl_rows.append(row)
+            elif row[0] == 'ID':
+                metrics['inserted bases'] += int(row[1]) * int(row[2])
+                metrics['deleted bases'] += int(row[1]) * int(row[3])
+            elif row[0] == 'IS':
+                metrics['insert size histogram'][int(row[1])] = int(row[2])
+            elif row[0] == 'LFQ':
+                lfq_rows.append(row)
+            elif row[0] == 'LRL':
+                lrl_rows.append(row)
+            elif row[0] == 'RL':
+                rl_rows.append(row)
+            elif row[0] == 'SN':
+                samtools_key = re.sub(':$', '', row[1])
+                if samtools_key not in key_map: continue
+                if samtools_key in float_keys: val = float(row[2])
+                else: val = int(row[2])
+                metrics[key_map[samtools_key]] = val
+        metrics['average read length'] = self.mean_read_length(rl_rows)
+        metrics['paired end'] = metrics['paired reads'] > 0
+        metrics['read 1 average length'] = self.mean_read_length(frl_rows)
+        metrics['read 2 average length'] = self.mean_read_length(lrl_rows)
+        metrics['read 1 length histogram'] = self.read_length_histogram(frl_rows)
+        metrics['read 2 length histogram'] = self.read_length_histogram(lrl_rows)
+        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
+        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
+        metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
+        metrics['read 1 quality histogram'] = ffq_histogram
+        metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
+        metrics['read 2 quality histogram'] = lfq_histogram
         return metrics
 
     def fq_stats(self, rows, precision=6):
@@ -150,91 +240,6 @@ class bam_qc:
             else:
                 metrics[keys[i]] = int(values[i])
         metrics['HISTOGRAM'] = hist
-        return metrics
-
-    def evaluate_samtools_metrics(self):
-        '''Process metrics derived from samtools output'''
-        if self.trim_quality == None:
-            result = pysam.stats(self.bam_path)
-        else:
-            result = pysam.stats("-q", str(self.trim_quality), self.bam_path)
-        reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
-            delimiter="\t"
-        )
-        # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
-        float_keys = [
-            'error rate',
-            'average quality',
-            'insert size average',
-            'insert size standard deviation',
-            'percentage of properly paired reads (%)'
-        ]
-        # map from SN field names to output keys
-        key_map = {
-            'bases mapped (cigar)': 'bases mapped',
-            'average length': 'average read length',
-            'insert size average': 'insert mean',
-            'insert size standard deviation': 'insert stdev',
-            'reads mapped': 'mapped reads',
-            'reads mapped and paired': 'reads mapped and paired',
-            'mismatches': 'mismatched bases',
-            # 'reads paired' > 0 => 'paired end' = True
-            'reads paired': 'paired reads',
-            'pairs on different chromosomes': 'pairsMappedToDifferentChr',
-            'reads properly paired': 'properly paired reads',
-            'raw total sequences': 'total reads',
-            'reads unmapped': 'unmapped reads',
-            'non-primary alignments': 'non primary reads',
-        }
-        metrics = {}
-        metrics['inserted bases'] = 0
-        metrics['deleted bases'] = 0
-        metrics['insert size histogram'] = {}
-        read_len = {'total': 0, 'count': 0}
-        ffq_rows = []
-        lfq_rows = []
-        rl_rows = []
-        frl_rows = []
-        lrl_rows = []
-        for row in reader:
-            if row[0] == 'FFQ':
-                ffq_rows.append(row)
-            elif row[0] == 'FRL':
-                frl_rows.append(row)
-            elif row[0] == 'ID':
-                metrics['inserted bases'] += int(row[1]) * int(row[2])
-                metrics['deleted bases'] += int(row[1]) * int(row[3])
-            elif row[0] == 'IS':
-                metrics['insert size histogram'][int(row[1])] = int(row[2])
-            elif row[0] == 'LFQ':
-                lfq_rows.append(row)
-            elif row[0] == 'LRL':
-                lrl_rows.append(row)
-            elif row[0] == 'RL':
-                rl_rows.append(row)
-            elif row[0] == 'SN':
-                samtools_key = re.sub(':$', '', row[1])
-                if samtools_key not in key_map: continue
-                if samtools_key in float_keys: val = float(row[2])
-                else: val = int(row[2])
-                metrics[key_map[samtools_key]] = val
-        metrics['average read length'] = self.mean_read_length(rl_rows)
-        metrics['paired end'] = metrics['paired reads'] > 0
-        metrics['qual cut'] = self.trim_quality
-        # TODO pysam.view may have to be adjusted for downsampling
-        metrics['qual fail reads'] = int(pysam.view('-c', self.bam_path)) \
-                                            - metrics['mapped reads']
-        metrics['read 1 average length'] = self.mean_read_length(frl_rows)
-        metrics['read 2 average length'] = self.mean_read_length(lrl_rows)
-        metrics['read 1 length histogram'] = self.read_length_histogram(frl_rows)
-        metrics['read 2 length histogram'] = self.read_length_histogram(lrl_rows)
-        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
-        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
-        metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
-        metrics['read 1 quality histogram'] = ffq_histogram
-        metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
-        metrics['read 2 quality histogram'] = lfq_histogram
         return metrics
         
     def write_output(self, out_path):
