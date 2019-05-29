@@ -55,8 +55,8 @@ class bam_qc:
                 if op in [0,1,2,4,5]:
                     for i in range(length):
                         if op != 2: cycle += 1 # do not increment cycle for deletions
-                        if op == 4: metrics['soft clip'] += length
-                        elif op == 5: metrics['hard clip'] += length
+                        if op == 4: metrics['soft clip bases'] += length
+                        elif op == 5: metrics['hard clip bases'] += length
                         if read.is_read1: metrics['read 1 '+op_names[op]+' by cycle'][cycle] += 1
                         if read.is_read2: metrics['read 2 '+op_names[op]+' by cycle'][cycle] += 1
                 else:
