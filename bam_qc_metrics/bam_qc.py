@@ -41,7 +41,20 @@ class bam_qc:
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
 
     def evaluate_custom_metrics(self, read1_length, read2_length):
-        '''Iterate over the BAM file to compute custom metrics'''
+        '''
+        Iterate over the BAM file to compute custom metrics
+        Processes CIGAR strings; see p. 7 of https://samtools.github.io/hts-specs/SAMv1.pdf
+        '''
+        # Relevant CIGAR operations
+        op_names = {
+            0: 'aligned',
+            1: 'insertion',
+            2: 'deletion',
+            4: 'soft clip',
+            5: 'hard clip',
+            8: 'mismatch'
+        }
+        # initialize the metrics data structure
         metrics = {
             'hard clip bases': 0,
             'soft clip bases': 0,
@@ -49,12 +62,14 @@ class bam_qc:
             'qual cut': self.trim_quality,
             'qual fail reads': 0
         }
-        op_names = ['aligned', 'insertion', 'deletion', 'soft clip', 'hard clip']
-        read_lengths = [read1_length, read2_length]
-        for op_name in op_names:
-            for i in [0, 1]:
-                key = 'read %d %s by cycle' % (i+1, op_name)
+        read_names = ['1', '2', '?']
+        read_lengths = [read1_length, read2_length, max(read1_length, read2_length)]
+        for op_name in op_names.values():
+            for i in range(len(read_names)):
+                key = 'read %s %s by cycle' % (read_names[i], op_name)
                 metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
+        # iterate over the BAM file
+        consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
         for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
             if self.trim_quality != None and read.mapping_quality < self.trim_quality:
                 metrics['qual fail reads'] += 1
@@ -63,14 +78,17 @@ class bam_qc:
                 metrics['readsMissingMDtags'] += 1
             cycle = 0
             for (op, length) in read.cigartuples:
-                if op in [0,1,2,4,5]:
+                if op in op_names:
                     for i in range(length):
-                        if op != 2: cycle += 1 # do not increment cycle for deletions
+                        if op in consumes_query: cycle += 1
                         if op == 4: metrics['soft clip bases'] += length
                         elif op == 5: metrics['hard clip bases'] += length
-                        if read.is_read1: metrics['read 1 '+op_names[op]+' by cycle'][cycle] += 1
-                        if read.is_read2: metrics['read 2 '+op_names[op]+' by cycle'][cycle] += 1
-                else:
+                        if read.is_read1: read_index = 0
+                        elif read.is_read2: read_index = 1
+                        else: read_index = 2
+                        key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
+                        metrics[key][cycle] += 1
+                elif op in consumes_query:
                     cycle += length
         return metrics
 
@@ -105,7 +123,7 @@ class bam_qc:
         metrics['inserted bases'] = 0
         metrics['deleted bases'] = 0
         metrics['insert size histogram'] = {}
-        retain_labels = ['FFQ', 'FRL', 'LFQ', 'LRL', 'RL']
+        retain_labels = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
         retained = {} # store rows for later processing
         for label in retain_labels: retained[label] = []
         if self.trim_quality == None:
