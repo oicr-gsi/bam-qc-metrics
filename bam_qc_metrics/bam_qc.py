@@ -77,13 +77,13 @@ class bam_qc:
     def evaluate_samtools_metrics(self):
         '''Process metrics derived from samtools output'''
         # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
-        float_keys = [
+        float_keys = set([
             'error rate',
             'average quality',
             'insert size average',
             'insert size standard deviation',
             'percentage of properly paired reads (%)'
-        ]
+        ])
         # map from SN field names to output keys
         key_map = {
             'bases mapped (cigar)': 'bases mapped',
@@ -93,7 +93,7 @@ class bam_qc:
             'reads mapped': 'mapped reads',
             'reads mapped and paired': 'reads mapped and paired',
             'mismatches': 'mismatched bases',
-            # 'reads paired' > 0 => 'paired end' = True
+            # 'reads paired' > 0 implies 'paired end' == True
             'reads paired': 'paired reads',
             'pairs on different chromosomes': 'pairsMappedToDifferentChr',
             'reads properly paired': 'properly paired reads',
@@ -105,12 +105,9 @@ class bam_qc:
         metrics['inserted bases'] = 0
         metrics['deleted bases'] = 0
         metrics['insert size histogram'] = {}
-        read_len = {'total': 0, 'count': 0}
-        ffq_rows = []
-        lfq_rows = []
-        rl_rows = []
-        frl_rows = []
-        lrl_rows = []
+        retain_labels = ['FFQ', 'FRL', 'LFQ', 'LRL', 'RL']
+        retained = {} # store rows for later processing
+        for label in retain_labels: retained[label] = []
         if self.trim_quality == None:
             result = pysam.stats(self.bam_path)
         else:
@@ -120,35 +117,27 @@ class bam_qc:
             delimiter="\t"
         )
         for row in reader:
-            if row[0] == 'FFQ':
-                ffq_rows.append(row)
-            elif row[0] == 'FRL':
-                frl_rows.append(row)
+            if row[0] in retain_labels:
+                retained[row[0]].append(row)
             elif row[0] == 'ID':
                 metrics['inserted bases'] += int(row[1]) * int(row[2])
                 metrics['deleted bases'] += int(row[1]) * int(row[3])
             elif row[0] == 'IS':
                 metrics['insert size histogram'][int(row[1])] = int(row[2])
-            elif row[0] == 'LFQ':
-                lfq_rows.append(row)
-            elif row[0] == 'LRL':
-                lrl_rows.append(row)
-            elif row[0] == 'RL':
-                rl_rows.append(row)
             elif row[0] == 'SN':
                 samtools_key = re.sub(':$', '', row[1])
                 if samtools_key not in key_map: continue
                 if samtools_key in float_keys: val = float(row[2])
                 else: val = int(row[2])
                 metrics[key_map[samtools_key]] = val
-        metrics['average read length'] = self.mean_read_length(rl_rows)
+        metrics['average read length'] = self.mean_read_length(retained['RL'])
         metrics['paired end'] = metrics['paired reads'] > 0
-        metrics['read 1 average length'] = self.mean_read_length(frl_rows)
-        metrics['read 2 average length'] = self.mean_read_length(lrl_rows)
-        metrics['read 1 length histogram'] = self.read_length_histogram(frl_rows)
-        metrics['read 2 length histogram'] = self.read_length_histogram(lrl_rows)
-        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(ffq_rows)
-        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(lfq_rows)
+        metrics['read 1 average length'] = self.mean_read_length(retained['FRL'])
+        metrics['read 2 average length'] = self.mean_read_length(retained['LRL'])
+        metrics['read 1 length histogram'] = self.read_length_histogram(retained['FRL'])
+        metrics['read 2 length histogram'] = self.read_length_histogram(retained['LRL'])
+        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(retained['FFQ'])
+        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(retained['LFQ'])
         metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
         metrics['read 1 quality histogram'] = ffq_histogram
         metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
