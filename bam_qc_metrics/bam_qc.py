@@ -6,6 +6,7 @@ import argparse, csv, json, os, re, pybedtools, pysam, sys
 
 class bam_qc:
 
+    DEFAULT_INSERT_MAX = 1500
     METADATA_KEYS = [
         'barcode',
         'instrument',
@@ -16,7 +17,7 @@ class bam_qc:
     ]
     
     def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
-                 trim_quality=None):
+                 trim_quality=None, expected_insert_max=None):
         with open(metadata_path) as f: self.metadata = json.loads(f.read())
         self.bam_path = bam_path
         self.target_path = target_path
@@ -35,11 +36,22 @@ class bam_qc:
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.trim_quality = trim_quality
+        if expected_insert_max != None:
+            self.expected_insert_max = expected_insert_max
+        else:
+            self.expected_insert_max = self.DEFAULT_INSERT_MAX
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
         self.samtools_metrics = self.evaluate_samtools_metrics()
         read1_length = max(self.samtools_metrics['read 1 length histogram'].keys())
         read2_length = max(self.samtools_metrics['read 2 length histogram'].keys())
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
+
+    def count_mapped_abnormally_far(self, insert_size_histogram):
+        count = 0
+        for key in insert_size_histogram.keys():
+            if key >= self.expected_insert_max:
+                count += insert_size_histogram[key]
+        return count
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
@@ -177,6 +189,7 @@ class bam_qc:
         metrics['read 1 quality histogram'] = ffq_histogram
         metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
         metrics['read 2 quality histogram'] = lfq_histogram
+        metrics['pairsMappedAbnormallyFar'] = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         return metrics
 
     def fq_stats(self, rows, precision=6):
@@ -287,19 +300,25 @@ class bam_qc:
         if out_path != '-':
             out_file.close()
 
+def validate_positive_integer(arg, name):
+    param = None
+    valid = True
+    try:
+        param = int(arg)
+    except ValueError:
+        sys.stderr.write("ERROR: %s must be an integer.\n" % name)
+        valid = False
+    if param != None and param < 0:
+        sys.stderr.write("ERROR: %s cannot be negative.\n" % name)
+        valid = False
+    return valid
 
 def validate_args(args):
     valid = True
     if args.trim_quality != None:
-        q_threshold = None
-        try:
-            q_threshold = int(args.trim_quality)
-        except ValueError:
-            sys.stderr.write("ERROR: Quality must be an integer.\n")
-            valid = False
-        if q_threshold != None and q_threshold < 0:
-            sys.stderr.write("ERROR: Quality cannot be negative.\n")
-            valid = False
+        valid = validate_positive_integer(args.trim_quality, 'Quality score')
+    if args.insert_max != None:
+        valid = validate_positive_integer(args.insert_max, 'Max insert size')
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
         if path_arg == None:
             continue
@@ -332,6 +351,8 @@ def main():
                         help='Path to input BAM file. Required.')
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
                         help='Path to text file output by Picard MarkDuplicates. Optional.')
+    parser.add_argument('-i', '--insert-max', metavar='INT',
+                        help='Maximum expected value for insert size; higher values will be counted as abnormal.')
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
@@ -343,7 +364,9 @@ def main():
                         'against. Optional; if given, must be sorted in same order as BAM file.')
     args = parser.parse_args()
     if not validate_args(args): exit(1)
-    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, int(args.trim_quality))
+    trim_quality = None if args.trim_quality == None else int(args.trim_quality)
+    insert_max = None if args.insert_max == None else int(args.insert_max)
+    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, trim_quality, insert_max)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
