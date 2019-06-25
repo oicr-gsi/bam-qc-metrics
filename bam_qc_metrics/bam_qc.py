@@ -2,7 +2,7 @@
 
 """Main script and class to compute BAM QC metrics"""
 
-import argparse, csv, json, os, re, pysam, sys
+import argparse, csv, json, os, re, pybedtools, pysam, sys
 
 class bam_qc:
 
@@ -35,11 +35,20 @@ class bam_qc:
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.trim_quality = trim_quality
+        self.bedtools_metrics = self.evaluate_bedtools_metrics()
         self.samtools_metrics = self.evaluate_samtools_metrics()
         read1_length = max(self.samtools_metrics['read 1 length histogram'].keys())
         read2_length = max(self.samtools_metrics['read 2 length histogram'].keys())
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
 
+    def evaluate_bedtools_metrics(self):
+        metrics = {}
+        bamBedTool = pybedtools.BedTool(self.bam_path)
+        targetBedTool = pybedtools.BedTool(self.target_path)
+        metrics['number of targets'] = targetBedTool.count()
+        coverage = bamBedTool.coverage(self.target_path)
+        return metrics
+        
     def evaluate_custom_metrics(self, read1_length, read2_length):
         '''
         Iterate over the BAM file to compute custom metrics
@@ -123,9 +132,9 @@ class bam_qc:
         metrics['inserted bases'] = 0
         metrics['deleted bases'] = 0
         metrics['insert size histogram'] = {}
-        retain_labels = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
-        retained = {} # store rows for later processing
-        for label in retain_labels: retained[label] = []
+        labels_to_store = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
+        stored = {} # store selected rows for later processing
+        for label in labels_to_store: stored[label] = []
         if self.trim_quality == None:
             result = pysam.stats(self.bam_path)
         else:
@@ -135,8 +144,8 @@ class bam_qc:
             delimiter="\t"
         )
         for row in reader:
-            if row[0] in retain_labels:
-                retained[row[0]].append(row)
+            if row[0] in labels_to_store:
+                stored[row[0]].append(row)
             elif row[0] == 'ID':
                 metrics['inserted bases'] += int(row[1]) * int(row[2])
                 metrics['deleted bases'] += int(row[1]) * int(row[3])
@@ -148,14 +157,14 @@ class bam_qc:
                 if samtools_key in float_keys: val = float(row[2])
                 else: val = int(row[2])
                 metrics[key_map[samtools_key]] = val
-        metrics['average read length'] = self.mean_read_length(retained['RL'])
+        metrics['average read length'] = self.mean_read_length(stored['RL'])
         metrics['paired end'] = metrics['paired reads'] > 0
-        metrics['read 1 average length'] = self.mean_read_length(retained['FRL'])
-        metrics['read 2 average length'] = self.mean_read_length(retained['LRL'])
-        metrics['read 1 length histogram'] = self.read_length_histogram(retained['FRL'])
-        metrics['read 2 length histogram'] = self.read_length_histogram(retained['LRL'])
-        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(retained['FFQ'])
-        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(retained['LFQ'])
+        metrics['read 1 average length'] = self.mean_read_length(stored['FRL'])
+        metrics['read 2 average length'] = self.mean_read_length(stored['LRL'])
+        metrics['read 1 length histogram'] = self.read_length_histogram(stored['FRL'])
+        metrics['read 2 length histogram'] = self.read_length_histogram(stored['LRL'])
+        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(stored['FFQ'])
+        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(stored['LFQ'])
         metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
         metrics['read 1 quality histogram'] = ffq_histogram
         metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
@@ -253,6 +262,8 @@ class bam_qc:
         output = {}
         for key in self.METADATA_KEYS:
             output[key] = self.metadata.get(key)
+        for key in self.bedtools_metrics.keys():
+            output[key] = self.bedtools_metrics.get(key)
         for key in self.samtools_metrics.keys():
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
@@ -296,7 +307,10 @@ def validate_args(args):
     if args.out != '-':
         # ugly but robust Python idiom to resolve path of parent directory
         parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
-        if not os.path.isdir(parent_path):
+        if not os.path.exists(parent_path):
+            sys.stderr.write("ERROR: Parent directory of %s does not exist.\n" % args.out)
+            valid = False
+        elif not os.path.isdir(parent_path):
             sys.stderr.write("ERROR: Parent of %s is not a directory.\n" % args.out)
             valid = False
         elif not os.access(parent_path, os.W_OK):
