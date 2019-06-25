@@ -46,7 +46,9 @@ class bam_qc:
         bamBedTool = pybedtools.BedTool(self.bam_path)
         targetBedTool = pybedtools.BedTool(self.target_path)
         metrics['number of targets'] = targetBedTool.count()
-        coverage = bamBedTool.coverage(self.target_path)
+        metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+        #coverage = bamBedTool.coverage(self.target_path)
+        #print(coverage)
         return metrics
         
     def evaluate_custom_metrics(self, read1_length, read2_length):
