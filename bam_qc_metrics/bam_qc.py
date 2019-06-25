@@ -47,7 +47,13 @@ class bam_qc:
         targetBedTool = pybedtools.BedTool(self.target_path)
         metrics['number of targets'] = targetBedTool.count()
         metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
-        #coverage = bamBedTool.coverage(self.target_path)
+        size = 0
+        with open(self.target_path, newline='') as bedfile:
+            reader = csv.reader(bedfile, delimiter="\t")
+            for row in reader:
+                size += int(row[2]) - int(row[1])
+        metrics['target size'] = size
+        #coverage = targetBedTool.coverage(self.bam_path)
         #print(coverage)
         return metrics
         
