@@ -73,7 +73,8 @@ class bam_qc:
             reader = csv.reader(bedfile, delimiter="\t")
             for row in reader:
                 size += int(row[2]) - int(row[1])
-        metrics['target size'] = size
+        metrics['total target size'] = size
+        # TODO add bedtools coverage metrics?
         #coverage = targetBedTool.coverage(self.bam_path)
         #print(coverage)
         return metrics
