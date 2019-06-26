@@ -41,7 +41,7 @@ class bam_qc:
                        '-o', self.filtered_bam_path,
                        '-U', excluded_reads_path,
                        catch_stdout=False)
-            self.qual_fail_reads = pysam.view('-c', excluded_reads_path)
+            self.qual_fail_reads = int(pysam.view('-c', excluded_reads_path).strip())
         else:
             self.filtered_bam_path = unfiltered_bam_path
             self.qual_fail_reads = 0
