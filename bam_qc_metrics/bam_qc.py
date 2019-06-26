@@ -4,9 +4,10 @@
 
 import argparse, csv, json, os, re, pybedtools, pysam, sys
 
+DEFAULT_INSERT_MAX = 1500
+
 class bam_qc:
 
-    DEFAULT_INSERT_MAX = 1500
     METADATA_KEYS = [
         'barcode',
         'instrument',
@@ -39,7 +40,7 @@ class bam_qc:
         if expected_insert_max != None:
             self.expected_insert_max = expected_insert_max
         else:
-            self.expected_insert_max = self.DEFAULT_INSERT_MAX
+            self.expected_insert_max = DEFAULT_INSERT_MAX
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
         self.samtools_metrics = self.evaluate_samtools_metrics()
         read1_length = max(self.samtools_metrics['read 1 length histogram'].keys())
@@ -352,7 +353,8 @@ def main():
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
                         help='Path to text file output by Picard MarkDuplicates. Optional.')
     parser.add_argument('-i', '--insert-max', metavar='INT',
-                        help='Maximum expected value for insert size; higher values will be counted as abnormal.')
+                        help='Maximum expected value for insert size; higher values will be counted as abnormal. '+\
+                        'Optional; default = %i.' % DEFAULT_INSERT_MAX)
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
