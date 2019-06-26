@@ -144,8 +144,8 @@ class bam_qc:
         key_map = {
             'bases mapped (cigar)': 'bases mapped',
             'average length': 'average read length',
-            'insert size average': 'insert mean',
-            'insert size standard deviation': 'insert stdev',
+            'insert size average': 'insert size average',
+            'insert size standard deviation': 'insert size standard deviation',
             'reads mapped': 'mapped reads',
             'reads mapped and paired': 'reads mapped and paired',
             'mismatches': 'mismatched bases',
@@ -333,7 +333,7 @@ class bam_qc:
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
         output['mark duplicates'] = self.mark_duplicates_metrics
-        output['target'] = os.path.abspath(self.target_path)
+        output['target file'] = os.path.abspath(self.target_path)
         output['sample rate'] = self.sample_rate
         output['quality cutoff'] = self.trim_quality
         output['insert max'] = self.expected_insert_max
