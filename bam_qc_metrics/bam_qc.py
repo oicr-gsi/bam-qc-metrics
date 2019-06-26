@@ -106,6 +106,13 @@ class bam_qc:
             for i in range(len(read_names)):
                 key = 'read %s %s by cycle' % (read_names[i], op_name)
                 metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
+        # metrics for unknown reads -- equivalents for reads 1 and 2 are derived from samtools
+        ur_count = 0
+        ur_length_total = 0
+        ur_length_histogram = {}
+        ur_quality_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
+        ur_total_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
+        ur_quality_histogram = {}
         # iterate over the BAM file
         consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
         for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
@@ -115,6 +122,7 @@ class bam_qc:
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
             cycle = 0
+            read_index = None
             for (op, length) in read.cigartuples:
                 if op in op_names:
                     for i in range(length):
@@ -128,6 +136,30 @@ class bam_qc:
                         metrics[key][cycle] += 1
                 elif op in consumes_query:
                     cycle += length
+            if read_index == 2:
+                ur_count += 1
+                ur_length = read.query_length
+                ur_length_total += ur_length
+                if ur_length in ur_length_histogram:
+                    ur_length_histogram[ur_length] += 1
+                else:
+                    ur_length_histogram[ur_length] = 1
+                for i in range(read.query_length):
+                    q = read.query_qualities[i]
+                    ur_quality_by_cycle[i+1] += q
+                    ur_total_by_cycle[i+1] += 1
+                    if q in unknown_read_quality_histogram:
+                        ur_quality_histogram[q] += 1
+                    else:
+                        ur_read_quality_histogram[q] = 1
+        metrics['read ? average length'] = float(ur_length_total) / ur_count if ur_count > 0 else None
+        metrics['read ? length histogram'] = ur_length_histogram
+        for cycle in ur_quality_by_cycle.keys():
+            quality = ur_quality_by_cycle[cycle]
+            total = ur_total_by_cycle[cycle]
+            ur_quality_by_cycle[cycle] = float(quality)/total if total > 0 else 0
+        metrics['read ? quality by cycle'] = ur_quality_by_cycle
+        metrics['read ? quality histogram'] = ur_quality_histogram
         return metrics
 
     def evaluate_samtools_metrics(self):
