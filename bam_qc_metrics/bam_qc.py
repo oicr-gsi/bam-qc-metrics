@@ -2,12 +2,13 @@
 
 """Main script and class to compute BAM QC metrics"""
 
-import argparse, csv, json, os, re, pybedtools, pysam, sys
+import argparse, csv, json, os, re, pybedtools, pysam, sys, tempfile
 
 DEFAULT_INSERT_MAX = 1500
 
 class bam_qc:
 
+    DOWNSAMPLE_WARNING_THRESHOLD = 1000
     METADATA_KEYS = [
         'barcode',
         'instrument',
@@ -18,9 +19,16 @@ class bam_qc:
     ]
     
     def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
-                 trim_quality=None, expected_insert_max=None):
+                 trim_quality=None, expected_insert_max=None, sample_rate=None):
         with open(metadata_path) as f: self.metadata = json.loads(f.read())
-        self.bam_path = bam_path
+        if sample_rate != None:
+            self.sample_rate = sample_rate
+            self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_downsampled_')
+            self.bam_path = self.generate_downsampled_bam(bam_path)
+        else:
+            self.sample_rate = 1
+            self.tmp_dir = None
+            self.bam_path = bam_path
         self.target_path = target_path
         self.mark_duplicates_metrics = {
             "ESTIMATED_LIBRARY_SIZE": None,
@@ -214,6 +222,40 @@ class bam_qc:
             meanByCyc[cycle] = round(float(total) / count, precision) if count > 0 else 0
         return (meanByCyc, histogram)
 
+    def generate_downsampled_bam(self, bam_path):
+        '''
+        Write a temporary downsampled BAM file for all subsequent input
+        '''
+        if self.sample_rate == 1:
+            sys.stderr.write("Sample rate = 1, omitting down sampling\n")
+            return bam_path
+        sorted_bam_path = os.path.join(self.tmp.name, 'sorted.bam')
+        sampled_bam_path = os.path.join(self.tmp.name, 'downsampled.bam')
+        # ensure file is sorted by name, so pairs are together
+        pysam.sort('-n', '-o', sorted_bam_path, bam_path)
+        bam_in = pysam.AlignmentFile(sorted_bam_path)
+        bam_out = pysam.AlignmentFile(sampled_bam_path, 'wb', template=bam_in)
+        count = 0
+        # sample two reads at a time -- should be read 1 and read 2, if read is paired
+        interval = self.sample_rate * 2
+        sample_next = False
+        sampled = 0
+        for read in bam_in:
+            count += 1
+            if (count + 1) % interval == 0:
+                bam_out.write(read)
+                sampled += 1
+                sample_next = True
+            elif sample_next:
+                bam_out.write(read)
+                sample_next = False
+                sampled += 1
+        bam_in.close()
+        bam_out.close()
+        if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
+            sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
+        return sampled_bam_path
+
     def mean_read_length(self, rows):
         '''Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length'''
         total = 0
@@ -292,7 +334,9 @@ class bam_qc:
             output[key] = self.custom_metrics.get(key)
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['target'] = os.path.abspath(self.target_path)
-        output['target_size'] = None # TODO placeholder; find with pybedtools
+        output['sample rate'] = self.sample_rate
+        output['quality cutoff'] = self.trim_quality
+        output['insert max'] = self.expected_insert_max
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
@@ -320,6 +364,8 @@ def validate_args(args):
         valid = validate_positive_integer(args.trim_quality, 'Quality score')
     if args.insert_max != None:
         valid = validate_positive_integer(args.insert_max, 'Max insert size')
+    if args.sample_rate != None:
+        valid = validate_positive_integer(args.sample_rate, 'Downsampling rate')
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
         if path_arg == None:
             continue
@@ -361,6 +407,8 @@ def main():
                         help='Path for JSON output, or - for STDOUT. Required.')
     parser.add_argument('-q', '--trim-quality', metavar='QSCORE',
                         help='Samtools threshold for trimming alignment quality. Optional.')
+    parser.add_argument('-s', '--sample-rate', metavar='INT',
+                        help='Sample every Nth read, where N is the argument. Optional, defaults to 1 (no sampling).')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
@@ -368,7 +416,8 @@ def main():
     if not validate_args(args): exit(1)
     trim_quality = None if args.trim_quality == None else int(args.trim_quality)
     insert_max = None if args.insert_max == None else int(args.insert_max)
-    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, trim_quality, insert_max)
+    sample_rate = None if args.sample_rate == None else int(args.sample_rate)
+    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, trim_quality, insert_max, sample_rate)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
