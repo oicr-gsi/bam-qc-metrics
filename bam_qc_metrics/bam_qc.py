@@ -20,16 +20,33 @@ class bam_qc:
     
     def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
                  trim_quality=None, expected_insert_max=None, sample_rate=None):
-        with open(metadata_path) as f: self.metadata = json.loads(f.read())
+        self.target_path = target_path
+        self.trim_quality = trim_quality
+        self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_')
+        # apply downsampling (if any)
+        unfiltered_bam_path = None
         if sample_rate != None:
             self.sample_rate = sample_rate
-            self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_downsampled_')
-            self.bam_path = self.generate_downsampled_bam(bam_path)
+            unfiltered_bam_path = self.generate_downsampled_bam(bam_path)
         else:
             self.sample_rate = 1
-            self.tmp_dir = None
-            self.bam_path = bam_path
-        self.target_path = target_path
+            unfiltered_bam_path = bam_path
+        # apply quality filter (if any)
+        excluded_reads_path = os.path.join(self.tmp.name, 'excluded.bam')
+        if trim_quality:
+            self.filtered_bam_path = os.path.join(self.tmp.name, 'filtered.bam')
+            pysam.view(unfiltered_bam_path,
+                       '-b',
+                       '-q', str(trim_quality),
+                       '-o', self.filtered_bam_path,
+                       '-U', excluded_reads_path,
+                       catch_stdout=False)
+            self.qual_fail_reads = pysam.view('-c', excluded_reads_path)
+        else:
+            self.filtered_bam_path = unfiltered_bam_path
+            self.qual_fail_reads = 0
+        # find metrics
+        with open(metadata_path) as f: self.metadata = json.loads(f.read())
         self.mark_duplicates_metrics = {
             "ESTIMATED_LIBRARY_SIZE": None,
             "HISTOGRAM": {},
@@ -44,7 +61,6 @@ class bam_qc:
         }
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
-        self.trim_quality = trim_quality
         if expected_insert_max != None:
             self.expected_insert_max = expected_insert_max
         else:
@@ -64,7 +80,7 @@ class bam_qc:
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
-        bamBedTool = pybedtools.BedTool(self.bam_path)
+        bamBedTool = pybedtools.BedTool(self.filtered_bam_path)
         targetBedTool = pybedtools.BedTool(self.target_path)
         metrics['number of targets'] = targetBedTool.count()
         metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
@@ -116,10 +132,7 @@ class bam_qc:
         ur_quality_histogram = {}
         # iterate over the BAM file
         consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
-        for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
-            if self.trim_quality != None and read.mapping_quality < self.trim_quality:
-                metrics['qual fail reads'] += 1
-                continue
+        for read in pysam.AlignmentFile(self.filtered_bam_path, 'rb').fetch(until_eof=True):
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
             cycle = 0
@@ -197,10 +210,7 @@ class bam_qc:
         labels_to_store = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
         stored = {} # store selected rows for later processing
         for label in labels_to_store: stored[label] = []
-        if self.trim_quality == None:
-            result = pysam.stats(self.bam_path)
-        else:
-            result = pysam.stats("-q", str(self.trim_quality), self.bam_path)
+        result = pysam.stats(self.filtered_bam_path)
         reader = csv.reader(
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
             delimiter="\t"
@@ -365,6 +375,7 @@ class bam_qc:
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
+        output['qual fail reads'] = self.qual_fail_reads
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['target file'] = os.path.abspath(self.target_path)
         output['sample rate'] = self.sample_rate

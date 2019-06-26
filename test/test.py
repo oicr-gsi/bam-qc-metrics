@@ -26,7 +26,8 @@ class test(unittest.TestCase):
         with (open(out_path)) as f: output = json.loads(f.read())
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
-
+        qc.tmp.cleanup()
+        
     def test_downsample(self):
         quality = 30
         sample_rate = 10
