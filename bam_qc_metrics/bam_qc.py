@@ -17,6 +17,7 @@ class bam_qc:
         'run name',
         'sample'
     ]
+    PRECISION = 1 # number of decimal places for rounded output
     
     def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
                  trim_quality=None, expected_insert_max=None, sample_rate=None):
@@ -167,16 +168,16 @@ class bam_qc:
                     q = read.query_qualities[i]
                     ur_quality_by_cycle[i+1] += q
                     ur_total_by_cycle[i+1] += 1
-                    if q in unknown_read_quality_histogram:
+                    if q in ur_quality_histogram:
                         ur_quality_histogram[q] += 1
                     else:
-                        ur_read_quality_histogram[q] = 1
-        metrics['read ? average length'] = float(ur_length_total) / ur_count if ur_count > 0 else None
+                        ur_quality_histogram[q] = 1
+        metrics['read ? average length'] = round(float(ur_length_total) / ur_count, self.PRECISION) if ur_count > 0 else None
         metrics['read ? length histogram'] = ur_length_histogram
         for cycle in ur_quality_by_cycle.keys():
             quality = ur_quality_by_cycle[cycle]
             total = ur_total_by_cycle[cycle]
-            ur_quality_by_cycle[cycle] = float(quality)/total if total > 0 else 0
+            ur_quality_by_cycle[cycle] = round(float(quality)/total, self.PRECISION) if total > 0 else 0
         metrics['read ? quality by cycle'] = ur_quality_by_cycle
         metrics['read ? quality histogram'] = ur_quality_histogram
         return metrics
@@ -249,7 +250,7 @@ class bam_qc:
         metrics['pairsMappedAbnormallyFar'] = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         return metrics
 
-    def fq_stats(self, rows, precision=6):
+    def fq_stats(self, rows):
         '''
         Compute quality metrics from either FFQ or LFQ entries in samtools stats:
             - Mean quality by cycle
@@ -267,7 +268,7 @@ class bam_qc:
                 total += counts[qscore]*qscore
                 count += counts[qscore]
                 histogram[qscore] += counts[qscore]
-            meanByCyc[cycle] = round(float(total) / count, precision) if count > 0 else 0
+            meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
         return (meanByCyc, histogram)
 
     def generate_downsampled_bam(self, bam_path):
@@ -316,7 +317,7 @@ class bam_qc:
             length_count = int(row[2])
             total += length * length_count
             count += length_count
-        mean_rl = float(total) / count if count > 0 else 0
+        mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
         return mean_rl
 
     def read_length_histogram(self, rows):
