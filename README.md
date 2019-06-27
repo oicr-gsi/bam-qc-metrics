@@ -13,6 +13,12 @@ The `bamtools` executable must be available on the current `PATH`. Note that ver
 
 Run the script `bam_qc_metrics/bam_qc.py` with `--help` for instructions.
 
+## Note on sequence mismatches
+
+The `mismatched bases` field may not be consistent with the mismatch-by-cycle fields for each read.
+
+The former is derived from `samtools stats`; the latter from CIGAR strings. The CIGAR operation M for 'alignment match' may represent a sequence match or mismatch. So, the CIGAR string does not necessarily record all mismatches. In the event of inconsistency, `mismatched bases` should be taken as correct.
+
 ## Conventions
 
 - Changelog: See CHANGELOG.md and https://keepachangelog.com/en/1.0.0/
