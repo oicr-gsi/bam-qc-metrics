@@ -23,6 +23,7 @@ class bam_qc:
         self.target_path = target_path
         self.trim_quality = trim_quality
         self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_')
+        self.tmpdir = self.tmp.name
         # apply downsampling (if any)
         unfiltered_bam_path = None
         if sample_rate != None:
@@ -32,12 +33,12 @@ class bam_qc:
             self.sample_rate = 1
             unfiltered_bam_path = bam_path
         # apply quality filter (if any)
-        excluded_reads_path = os.path.join(self.tmp.name, 'excluded.bam')
-        if trim_quality:
-            self.filtered_bam_path = os.path.join(self.tmp.name, 'filtered.bam')
+        excluded_reads_path = os.path.join(self.tmpdir, 'excluded.bam')
+        if self.trim_quality:
+            self.filtered_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
             pysam.view(unfiltered_bam_path,
                        '-b',
-                       '-q', str(trim_quality),
+                       '-q', str(self.trim_quality),
                        '-o', self.filtered_bam_path,
                        '-U', excluded_reads_path,
                        catch_stdout=False)
@@ -120,8 +121,6 @@ class bam_qc:
             'hard clip bases': 0,
             'soft clip bases': 0,
             'readsMissingMDtags': 0,
-            'qual cut': self.trim_quality,
-            'qual fail reads': 0
         }
         read_names = ['1', '2', '?']
         read_lengths = [read1_length, read2_length, max(read1_length, read2_length)]
@@ -143,14 +142,14 @@ class bam_qc:
                 metrics['readsMissingMDtags'] += 1
             cycle = 1
             read_index = None
+            if read.is_read1: read_index = 0
+            elif read.is_read2: read_index = 1
+            else: read_index = 2
             for (op, length) in read.cigartuples:
                 if op in op_names:
+                    if op == 4: metrics['soft clip bases'] += length
+                    elif op == 5: metrics['hard clip bases'] += length
                     for i in range(length):
-                        if op == 4: metrics['soft clip bases'] += length
-                        elif op == 5: metrics['hard clip bases'] += length
-                        if read.is_read1: read_index = 0
-                        elif read.is_read2: read_index = 1
-                        else: read_index = 2
                         key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
                         metrics[key][cycle] += 1
                         if op in consumes_query: cycle += 1
@@ -274,18 +273,21 @@ class bam_qc:
     def generate_downsampled_bam(self, bam_path):
         '''
         Write a temporary downsampled BAM file for all subsequent input
+
+        This is fully deterministic -- for sample rate N, takes every (N*2)th pair of reads
         '''
         if self.sample_rate == 1:
             sys.stderr.write("Sample rate = 1, omitting down sampling\n")
             return bam_path
-        sorted_bam_path = os.path.join(self.tmp.name, 'sorted.bam')
-        sampled_bam_path = os.path.join(self.tmp.name, 'downsampled.bam')
+        sorted_bam_path = os.path.join(self.tmpdir, 'sorted.bam')
+        sampled_bam_path = os.path.join(self.tmpdir, 'downsampled.bam')
         # ensure file is sorted by name, so pairs are together
         pysam.sort('-n', '-o', sorted_bam_path, bam_path)
         bam_in = pysam.AlignmentFile(sorted_bam_path)
         bam_out = pysam.AlignmentFile(sampled_bam_path, 'wb', template=bam_in)
         count = 0
         # sample two reads at a time -- should be read 1 and read 2, if read is paired
+        # first read is odd-numbered (should be read 1), second is even-numbered (read 2)
         interval = self.sample_rate * 2
         sample_next = False
         sampled = 0
@@ -381,11 +383,11 @@ class bam_qc:
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
+        output['qual cut'] = self.trim_quality
         output['qual fail reads'] = self.qual_fail_reads
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['target file'] = os.path.abspath(self.target_path)
         output['sample rate'] = self.sample_rate
-        output['quality cutoff'] = self.trim_quality
         output['insert max'] = self.expected_insert_max
         if out_path != '-':
             out_file = open(out_path, 'w')

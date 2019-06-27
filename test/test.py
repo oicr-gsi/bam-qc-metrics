@@ -16,6 +16,7 @@ class test(unittest.TestCase):
         self.target_path = os.path.join(self.testdir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.testdir, 'expected.json')
         self.expected_path_downsampled = os.path.join(self.testdir, 'expected_downsampled.json')
+        #self.maxDiff = None # uncomment to show the (very long) full output diff
         
     def test(self):
         quality = 30
