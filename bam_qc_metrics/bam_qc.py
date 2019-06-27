@@ -45,8 +45,14 @@ class bam_qc:
         else:
             self.filtered_bam_path = unfiltered_bam_path
             self.qual_fail_reads = 0
+        # read required keys from metadata (if any)
+        if metadata_path != None:
+            with open(metadata_path) as f: raw_metadata = json.loads(f.read())
+            self.metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
+        else:
+            sys.stderr.write("WARNING: Metadata file not given, using empty defaults\n")
+            self.metadata = {key: None for key in self.METADATA_KEYS}
         # find metrics
-        with open(metadata_path) as f: self.metadata = json.loads(f.read())
         self.mark_duplicates_metrics = {
             "ESTIMATED_LIBRARY_SIZE": None,
             "HISTOGRAM": {},
