@@ -135,12 +135,11 @@ class bam_qc:
         for read in pysam.AlignmentFile(self.filtered_bam_path, 'rb').fetch(until_eof=True):
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
-            cycle = 0
+            cycle = 1
             read_index = None
             for (op, length) in read.cigartuples:
                 if op in op_names:
                     for i in range(length):
-                        if op in consumes_query: cycle += 1
                         if op == 4: metrics['soft clip bases'] += length
                         elif op == 5: metrics['hard clip bases'] += length
                         if read.is_read1: read_index = 0
@@ -148,6 +147,7 @@ class bam_qc:
                         else: read_index = 2
                         key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
                         metrics[key][cycle] += 1
+                        if op in consumes_query: cycle += 1
                 elif op in consumes_query:
                     cycle += length
             if read_index == 2:
