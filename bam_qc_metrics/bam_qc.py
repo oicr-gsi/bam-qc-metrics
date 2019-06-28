@@ -18,7 +18,6 @@ class bam_qc:
         'sample'
     ]
     PRECISION = 1 # number of decimal places for rounded output
-    
     def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
                  trim_quality=None, expected_insert_max=None, sample_rate=None, tmpdir=None):
         self.target_path = target_path
@@ -40,16 +39,18 @@ class bam_qc:
         # apply quality filter (if any)
         excluded_reads_path = os.path.join(self.tmpdir, 'excluded.bam')
         if self.trim_quality:
-            self.filtered_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
+            self.qc_input_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
             pysam.view(unfiltered_bam_path,
                        '-b',
                        '-q', str(self.trim_quality),
-                       '-o', self.filtered_bam_path,
+                       '-o', self.qc_input_bam_path,
                        '-U', excluded_reads_path,
                        catch_stdout=False)
             self.qual_fail_reads = int(pysam.view('-c', excluded_reads_path).strip())
+            if sample_rate != None:
+                os.remove(unfiltered_bam_path) # downsampled, unfiltered file is no longer needed
         else:
-            self.filtered_bam_path = unfiltered_bam_path
+            self.qc_input_bam_path = unfiltered_bam_path
             self.qual_fail_reads = 0
         # read required keys from metadata (if any)
         if metadata_path != None:
@@ -103,7 +104,7 @@ class bam_qc:
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
-        bamBedTool = pybedtools.BedTool(self.filtered_bam_path)
+        bamBedTool = pybedtools.BedTool(self.qc_input_bam_path)
         targetBedTool = pybedtools.BedTool(self.target_path)
         metrics['number of targets'] = targetBedTool.count()
         metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
@@ -153,7 +154,7 @@ class bam_qc:
         ur_quality_histogram = {}
         # iterate over the BAM file
         consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
-        for read in pysam.AlignmentFile(self.filtered_bam_path, 'rb').fetch(until_eof=True):
+        for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
             cycle = 1
@@ -231,7 +232,7 @@ class bam_qc:
         labels_to_store = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
         stored = {} # store selected rows for later processing
         for label in labels_to_store: stored[label] = []
-        result = pysam.stats(self.filtered_bam_path)
+        result = pysam.stats(self.qc_input_bam_path)
         reader = csv.reader(
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
             delimiter="\t"
