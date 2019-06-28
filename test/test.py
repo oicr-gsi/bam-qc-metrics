@@ -28,7 +28,7 @@ class test(unittest.TestCase):
         with (open(out_path)) as f: output = json.loads(f.read())
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
-        qc.tmp.cleanup()
+        qc.cleanup()
         
     def test_downsample(self):
         quality = 30
@@ -41,7 +41,7 @@ class test(unittest.TestCase):
         with (open(out_path)) as f: output = json.loads(f.read())
         with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
-        qc.tmp.cleanup()
+        qc.cleanup()
         
     def tearDown(self):
         self.tmp.cleanup()
