@@ -20,11 +20,15 @@ class bam_qc:
     PRECISION = 1 # number of decimal places for rounded output
     
     def __init__(self, bam_path, target_path, metadata_path=None, mark_duplicates_path=None,
-                 trim_quality=None, expected_insert_max=None, sample_rate=None):
+                 trim_quality=None, expected_insert_max=None, sample_rate=None, tmpdir=None):
         self.target_path = target_path
         self.trim_quality = trim_quality
-        self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_')
-        self.tmpdir = self.tmp.name
+        self.tmp_object = None
+        if tmpdir==None:
+            self.tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
+            self.tmpdir = self.tmp_object.name
+        else:
+            self.tmpdir = tmpdir
         # apply downsampling (if any)
         unfiltered_bam_path = None
         if sample_rate != None:
@@ -78,6 +82,17 @@ class bam_qc:
         read1_length = max(self.samtools_metrics['read 1 length histogram'].keys())
         read2_length = max(self.samtools_metrics['read 2 length histogram'].keys())
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
+
+    def cleanup(self):
+        '''
+        Temporary directory object (if any) will be automatically deleted when bam_qc object
+        is out of scope. This method allows explicit cleanup, eg. to avoid warnings in the
+        test harness.
+        '''
+        if self.tmp_object != None:
+            self.tmp_object.cleanup()
+        else:
+            sys.stderr.write("Omitting cleanup for user-specified temporary directory %s\n" % self.tmpdir)
 
     def count_mapped_abnormally_far(self, insert_size_histogram):
         count = 0
@@ -398,6 +413,33 @@ class bam_qc:
         if out_path != '-':
             out_file.close()
 
+
+def validate_input_file(path_arg):
+    valid = True
+    if not os.path.exists(path_arg):
+        sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
+        valid = False
+    elif not os.path.isfile(path_arg):
+        sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
+        valid = False
+    elif not os.access(path_arg, os.R_OK):
+        sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
+        valid = False
+    return valid
+
+def validate_output_dir(dir_path):
+    valid = True
+    if not os.path.exists(dir_path):
+        sys.stderr.write("ERROR: Directory %s does not exist.\n" % dir_path)
+        valid = False
+    elif not os.path.isdir(dir_path):
+        sys.stderr.write("ERROR: Path %s is not a directory.\n" % dir_path)
+        valid = False
+    elif not os.access(dir_path, os.W_OK):
+        sys.stderr.write("ERROR: Directory %s is not writable.\n" % dir_path)
+        valid = False
+    return valid
+
 def validate_positive_integer(arg, name):
     param = None
     valid = True
@@ -413,36 +455,22 @@ def validate_positive_integer(arg, name):
 
 def validate_args(args):
     valid = True
+    # flip valid from True to False if a check is failed; never flip back to True
     if args.trim_quality != None:
         valid = validate_positive_integer(args.trim_quality, 'Quality score')
     if args.insert_max != None:
-        valid = validate_positive_integer(args.insert_max, 'Max insert size')
+        valid = valid and validate_positive_integer(args.insert_max, 'Max insert size')
     if args.sample_rate != None:
-        valid = validate_positive_integer(args.sample_rate, 'Downsampling rate')
+        valid = valid and validate_positive_integer(args.sample_rate, 'Downsampling rate')
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
-        if path_arg == None:
-            continue
-        if not os.path.exists(path_arg):
-            sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
-            valid = False
-        elif not os.path.isfile(path_arg):
-            sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
-            valid = False
-        elif not os.access(path_arg, os.R_OK):
-            sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
-            valid = False
+        if path_arg != None:
+            valid = valid and validate_input_file(path_arg)
     if args.out != '-':
         # ugly but robust Python idiom to resolve path of parent directory
         parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
-        if not os.path.exists(parent_path):
-            sys.stderr.write("ERROR: Parent directory of %s does not exist.\n" % args.out)
-            valid = False
-        elif not os.path.isdir(parent_path):
-            sys.stderr.write("ERROR: Parent of %s is not a directory.\n" % args.out)
-            valid = False
-        elif not os.access(parent_path, os.W_OK):
-            sys.stderr.write("ERROR: Parent directory of %s is not writable.\n" % args.out)
-            valid = False
+        valid = valid and validate_output_dir(parent_path)
+    if args.temp_dir != None:
+        valid = valid and validate_output_dir(args.temp_dir)
     return valid
 
 def main():
@@ -465,12 +493,13 @@ def main():
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
+    parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to /tmp')
     args = parser.parse_args()
     if not validate_args(args): exit(1)
     trim_quality = None if args.trim_quality == None else int(args.trim_quality)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
-    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, trim_quality, insert_max, sample_rate)
+    qc = bam_qc(args.bam, args.target, args.metadata, args.mark_duplicates, trim_quality, insert_max, sample_rate, args.temp_dir)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
