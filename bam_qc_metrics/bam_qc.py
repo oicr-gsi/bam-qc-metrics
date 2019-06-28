@@ -402,7 +402,7 @@ class bam_qc:
         output['qual cut'] = self.trim_quality
         output['qual fail reads'] = self.qual_fail_reads
         output['mark duplicates'] = self.mark_duplicates_metrics
-        output['target file'] = os.path.abspath(self.target_path)
+        output['target file'] = os.path.split(self.target_path)[-1]
         output['sample rate'] = self.sample_rate
         output['insert max'] = self.expected_insert_max
         if out_path != '-':
