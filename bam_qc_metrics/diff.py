@@ -36,10 +36,11 @@ class diff:
         'sequencing type'
     ])
     
-    def __init__(self, old_path, new_path):
+    def __init__(self, old_path, new_path, brief, tsv_path):
         with open(old_path) as f: self.old_data = json.loads(f.read())
         with open(new_path) as f: self.new_data = json.loads(f.read())
-
+        self.brief = brief
+        self.tsv_path = tsv_path
         self.old_to_new_keys = {
             'aligned bases': 'bases mapped',
             'insert histogram': 'insert size histogram',
@@ -73,13 +74,18 @@ class diff:
 
         mismatch = 0
         total = 0
-        for old_key in self.old_data.keys():
+        if self.tsv_path:
+            tsv = open(self.tsv_path, 'w')
+        else:
+            tsv = None
+        for old_key in sorted(self.old_data.keys()):
             if old_key in self.OBSOLETE_KEYS:
                 continue
             total += 1
             new_key = self.old_to_new_keys[old_key]
             old_output = self.old_data[old_key]
             new_output = self.new_data[new_key]
+            tsv_out = [str(x) for x in [old_key, new_key, self.old_data[old_key], self.new_data[new_key]]]
             if self.old_data[old_key] != self.new_data[new_key]:
                 # old data records some numbers as strings; ignore
                 if str(self.old_data[old_key]) == str(self.new_data[new_key]):
@@ -104,13 +110,28 @@ class diff:
                             mismatch_new_to_old += 1
                             if len(new_example) < max_examples:
                                 new_example.append([sub_key, old_subdict.get(sub_key), new_subdict.get(sub_key)])
-                    old_output = "%i of %i fields in old data do not match\nExamples: %s" % (mismatch_old_to_new, len(old_subdict), str(old_example))
-                    new_output = "%i of %i fields in new data do not match\nExamples: %s" % (mismatch_new_to_old, len(new_subdict), str(new_example))
+                    if self.brief:
+                        old_example.append('...')
+                        new_example.append('...')
+                        old_diff = str(old_example)
+                        new_diff = str(new_example)
+                    else:
+                        old_diff = str(old_subdict)
+                        new_diff = str(new_subdict)
+                    old_output = "%i of %i fields in old data do not match: %s" % (mismatch_old_to_new, len(old_subdict), old_diff)
+                    new_output = "%i of %i fields in new data do not match: %s" % (mismatch_new_to_old, len(new_subdict), new_diff)
                 print("###\nMismatched data for keys (%s, %s)" % (old_key, new_key))
                 print(old_output)
                 print(new_output)
                 mismatch += 1
+                tsv_out.append('Not equal')
+            else:
+                tsv_out.append('Equal')
+            if tsv != None:
+                print("\t".join(tsv_out), file=tsv)
         print("Mismatches found for %i of %i top-level fields" % (mismatch, total))
+        if tsv != None:
+            tsv.close()
 
     def isAllZero(self, dictionary):
         allZero = True
@@ -122,12 +143,15 @@ class diff:
         
 def main():
     parser = argparse.ArgumentParser(description='Diff for old and new BAMQC JSON files.')
+    parser.add_argument('-b', '--brief', action="store_true", help="Show only examples instead of the full diff by field")
     parser.add_argument('-n', '--new', metavar='PATH', required=True,
                         help='Path to new-format input JSON file. Required.')
     parser.add_argument('-o', '--old', metavar='PATH', required=True,
                         help='Path to old-format input JSON file. Required.')
+    parser.add_argument('-t', '--tsv', metavar='PATH',
+                        help='Path for TSV output. Optional.')
     args = parser.parse_args()
-    diff(args.old, args.new).run()
+    diff(args.old, args.new, args.brief, args.tsv).run()
     
 if __name__ == "__main__":
     main()
