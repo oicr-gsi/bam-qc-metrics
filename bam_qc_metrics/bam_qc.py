@@ -30,7 +30,7 @@ class bam_qc:
             self.tmpdir = tmpdir
         # apply downsampling (if any)
         unfiltered_bam_path = None
-        if sample_rate != None:
+        if sample_rate != None and sample_rate > 1:
             self.sample_rate = sample_rate
             unfiltered_bam_path = self.generate_downsampled_bam(bam_path)
         else:
@@ -47,7 +47,7 @@ class bam_qc:
                        '-U', excluded_reads_path,
                        catch_stdout=False)
             self.qual_fail_reads = int(pysam.view('-c', excluded_reads_path).strip())
-            if sample_rate != None:
+            if self.sample_rate != 1:
                 os.remove(unfiltered_bam_path) # downsampled, unfiltered file is no longer needed
         else:
             self.qc_input_bam_path = unfiltered_bam_path
