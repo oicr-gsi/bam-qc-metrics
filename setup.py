@@ -13,6 +13,7 @@ def main():
     setup(
         name = "bam-qc-metrics",
         version = "0.1.0",
+        scripts = ['bin/run_bam_qc.py',],
         packages = ['bam_qc_metrics'],
         requires = ['pybedtools', 'pysam'],
         python_requires='>=3.5',

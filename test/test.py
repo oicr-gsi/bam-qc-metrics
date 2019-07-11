@@ -7,6 +7,8 @@ from bam_qc_metrics import bam_qc
 class test(unittest.TestCase):
 
     def setUp(self):
+        self.quality = 30
+        self.insert_max = 1500
         self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_test_')
         self.tmpdir = self.tmp.name
         self.testdir = os.path.dirname(os.path.realpath(__file__))
@@ -20,8 +22,8 @@ class test(unittest.TestCase):
         #self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def test(self):
-        quality = 30
-        qc = bam_qc(self.bam_path, self.target_path, self.metadata_path, self.markdup_path, quality)
+        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
+                    self.markdup_path, self.quality)
         out_path = os.path.join(self.tmpdir, 'out.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -31,10 +33,9 @@ class test(unittest.TestCase):
         qc.cleanup()
         
     def test_downsample(self):
-        quality = 30
         sample_rate = 10
-        qc = bam_qc(self.bam_path, self.target_path, self.metadata_path, self.markdup_path, quality,
-                    sample_rate=sample_rate)
+        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
+                    self.markdup_path, self.quality, sample_rate=sample_rate)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
