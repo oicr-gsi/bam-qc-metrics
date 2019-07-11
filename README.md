@@ -11,7 +11,11 @@ The `bamtools` executable must be available on the current `PATH`. Note that ver
 
 ## Usage
 
-Run the script `bam_qc_metrics/bam_qc.py` with `--help` for instructions.
+Run the script `bin/run_bam_qc.py` with `--help` for instructions.
+
+## Tests
+
+Run `test/test.py` for Python tests.
 
 ## Note on sequence mismatches
 
