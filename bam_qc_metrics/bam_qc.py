@@ -16,6 +16,10 @@ class bam_qc:
         'sample'
     ]
     PRECISION = 1 # number of decimal places for rounded output
+    READ_1_INDEX = 0
+    READ_2_INDEX = 1
+    READ_UNKNOWN_INDEX = 2
+
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
                  mark_duplicates_path=None, trim_quality=None, sample_rate=None, tmpdir=None):
         self.target_path = target_path
@@ -154,20 +158,21 @@ class bam_qc:
                 metrics['readsMissingMDtags'] += 1
             cycle = 1
             read_index = None
-            if read.is_read1: read_index = 0
-            elif read.is_read2: read_index = 1
-            else: read_index = 2
-            for (op, length) in read.cigartuples:
-                if op in op_names:
-                    if op == 4: metrics['soft clip bases'] += length
-                    elif op == 5: metrics['hard clip bases'] += length
-                    for i in range(length):
-                        key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
-                        metrics[key][cycle] += 1
-                        if op in consumes_query: cycle += 1
-                elif op in consumes_query:
-                    cycle += length
-            if read_index == 2:
+            if read.is_read1: read_index = self.READ_1_INDEX
+            elif read.is_read2: read_index = self.READ_2_INDEX
+            else: read_index = self.READ_UNKNOWN_INDEX
+            if read.cigartuples != None:
+                for (op, length) in read.cigartuples:
+                    if op in op_names:
+                        if op == 4: metrics['soft clip bases'] += length
+                        elif op == 5: metrics['hard clip bases'] += length
+                        for i in range(length):
+                            key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
+                            metrics[key][cycle] += 1
+                            if op in consumes_query: cycle += 1
+                    elif op in consumes_query:
+                        cycle += length
+            if read_index == self.READ_UNKNOWN_INDEX:
                 ur_count += 1
                 ur_length = read.query_length
                 ur_length_total += ur_length

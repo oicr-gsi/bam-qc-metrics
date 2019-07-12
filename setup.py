@@ -12,10 +12,10 @@ if sys.version_info[0] != 3:
 def main():
     setup(
         name = "bam-qc-metrics",
-        version = "0.1.0",
+        version = "0.1.1",
         scripts = ['bin/run_bam_qc.py',],
         packages = ['bam_qc_metrics'],
-        requires = ['pybedtools', 'pysam'],
+        install_requires = ['attrs', 'jsonschema', 'pybedtools', 'pyrsistent', 'pysam', 'six'],
         python_requires='>=3.5',
         author = "Iain Bancarz",
 	author_email = "ibancarz@oicr.on.ca",
