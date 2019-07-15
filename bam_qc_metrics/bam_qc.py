@@ -353,7 +353,7 @@ class bam_qc:
         for line in lines:
             line_count += 1
             line = line.strip()
-            if re.match('## METRICS CLASS\s+net\.sf\.picard\.sam\.DuplicationMetrics', line):
+            if re.match('## METRICS CLASS\s.*picard\.sam\.DuplicationMetrics$', line):
                 section += 1
             elif section == 1:
                 keys = re.split("\t", line)
@@ -374,11 +374,15 @@ class bam_qc:
             elif re.match('#', line) and section < 4 or line == '':
                 continue
             else:
-                params = (input_path, section, line)
+                params = (input_path, section, line_count)
                 msg = "Failed to parse duplicate metrics path %s, section %d, line %d" % params
                 raise ValueError(msg)
-        if len(keys) != len(values):
-            raise ValueError("Key and value lists from %s are of unequal length" % input_path)
+        if len(keys) == len(values) + 1 and keys[-1] == 'ESTIMATED_LIBRARY_SIZE':
+            # field is empty (no trailing \t) for low coverage; append a default value
+            values.append(0)
+        elif len(keys) != len(values):
+            # otherwise, mismatched key/value totals are an error
+            raise ValueError("Numbers of keys and values in %s do not match" % input_path)
         metrics = {}
         for i in range(len(keys)):
             if keys[i] == 'PERCENT_DUPLICATION':
