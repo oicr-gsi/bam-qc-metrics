@@ -162,7 +162,9 @@ class bam_qc:
             elif read.is_read2: read_index = self.READ_2_INDEX
             else: read_index = self.READ_UNKNOWN_INDEX
             if read.cigartuples != None:
-                for (op, length) in read.cigartuples:
+                if read.is_reverse: cigar_list = reversed(read.cigartuples)
+                else: cigar_list = read.cigartuples
+                for (op, length) in cigar_list:
                     if op in op_names:
                         if op == 4: metrics['soft clip bases'] += length
                         elif op == 5: metrics['hard clip bases'] += length
