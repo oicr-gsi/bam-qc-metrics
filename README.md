@@ -17,7 +17,15 @@ Run the script `bin/run_bam_qc.py` with `--help` for instructions.
 
 Run `test/test.py` for Python tests.
 
-## Note on sequence mismatches
+## Metric notes
+
+### Unmapped reads
+
+If a mapping quality filter is given (using the -q option), all metrics are calculated *after* the filter is applied, *except* for unmapped reads.
+
+Unmapped reads have no mapping score by definition. So unmapped reads are counted *after* downsampling but *before* quality filtering.
+
+### Sequence mismatches
 
 The `mismatched bases` field may not be consistent with the mismatch-by-cycle fields for each read.
 
