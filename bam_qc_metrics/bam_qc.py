@@ -22,47 +22,10 @@ class bam_qc:
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
                  mark_duplicates_path=None, trim_quality=None, sample_rate=None, tmpdir=None):
-        self.target_path = target_path
+        # define instance variables
+        self.bedtools_metrics = None
+        self.custom_metrics = None
         self.expected_insert_max = expected_insert_max
-        self.trim_quality = trim_quality
-        self.tmp_object = None
-        if tmpdir==None:
-            self.tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
-            self.tmpdir = self.tmp_object.name
-        else:
-            self.tmpdir = tmpdir
-        # apply downsampling (if any)
-        unfiltered_bam_path = None
-        if sample_rate != None and sample_rate > 1:
-            self.sample_rate = sample_rate
-            unfiltered_bam_path = self.generate_downsampled_bam(bam_path)
-        else:
-            self.sample_rate = 1
-            unfiltered_bam_path = bam_path
-        # apply quality filter (if any)
-        excluded_reads_path = os.path.join(self.tmpdir, 'excluded.bam')
-        if self.trim_quality:
-            self.qc_input_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
-            pysam.view(unfiltered_bam_path,
-                       '-b',
-                       '-q', str(self.trim_quality),
-                       '-o', self.qc_input_bam_path,
-                       '-U', excluded_reads_path,
-                       catch_stdout=False)
-            self.qual_fail_reads = int(pysam.view('-c', excluded_reads_path).strip())
-            if self.sample_rate != 1:
-                os.remove(unfiltered_bam_path) # downsampled, unfiltered file is no longer needed
-        else:
-            self.qc_input_bam_path = unfiltered_bam_path
-            self.qual_fail_reads = 0
-        # read required keys from metadata (if any)
-        if metadata_path != None:
-            with open(metadata_path) as f: raw_metadata = json.loads(f.read())
-            self.metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
-        else:
-            sys.stderr.write("WARNING: Metadata file not given, using empty defaults\n")
-            self.metadata = {key: None for key in self.METADATA_KEYS}
-        # find metrics
         self.mark_duplicates_metrics = {
             "ESTIMATED_LIBRARY_SIZE": None,
             "HISTOGRAM": {},
@@ -75,6 +38,54 @@ class bam_qc:
             "UNPAIRED_READS_EXAMINED": None,
             "UNPAIRED_READ_DUPLICATES": None
         }
+        self.metadata = None
+        self.qc_input_bam_path = None
+        self.qual_fail_reads = None
+        self.sample_rate = 1
+        self.samtools_metrics = None
+        self.target_path = target_path
+        self.trim_quality = trim_quality
+        self.tmp_object = None
+        self.unmapped_excluded_reads = None
+        # set up temporary directory
+        if tmpdir==None:
+            self.tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
+            self.tmpdir = self.tmp_object.name
+        else:
+            self.tmpdir = tmpdir
+        # apply downsampling (if any)
+        if sample_rate != None and sample_rate > 1:
+            self.sample_rate = sample_rate
+            unfiltered_bam_path = self.generate_downsampled_bam(bam_path, self.sample_rate)
+        else:
+            unfiltered_bam_path = bam_path
+        # apply quality filter (if any)
+        excluded_reads_path = os.path.join(self.tmpdir, 'excluded.bam')
+        if self.trim_quality != None and self.trim_quality > 0:
+            self.qc_input_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
+            pysam.view(unfiltered_bam_path,
+                       '-b',
+                       '-q', str(self.trim_quality),
+                       '-o', self.qc_input_bam_path,
+                       '-U', excluded_reads_path,
+                       catch_stdout=False)
+            self.qual_fail_reads = int(pysam.view('-c', excluded_reads_path).strip())
+            # unmapped reads will fail the mapping quality filter, by definition
+            # so if the quality filter is applied, find unmapped total from the excluded reads
+            self.unmapped_excluded_reads = self.find_unmapped_reads(excluded_reads_path)
+            if self.sample_rate != 1:
+                os.remove(unfiltered_bam_path) # downsampled, unfiltered file is no longer needed
+        else:
+            self.qc_input_bam_path = unfiltered_bam_path
+            self.qual_fail_reads = 0
+        # read required keys from metadata (if any)
+        if metadata_path != None:
+            with open(metadata_path) as f: raw_metadata = json.loads(f.read())
+            self.metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
+        else:
+            sys.stderr.write("Metadata file not given, using empty defaults\n")
+            self.metadata = {key: None for key in self.METADATA_KEYS}
+        # find metrics
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
@@ -249,9 +260,25 @@ class bam_qc:
                 metrics['insert size histogram'][int(row[1])] = int(row[2])
             elif row[0] == 'SN':
                 samtools_key = re.sub(':$', '', row[1])
-                if samtools_key not in key_map: continue
-                if samtools_key in float_keys: val = float(row[2])
-                else: val = int(row[2])
+                if samtools_key not in key_map:
+                    continue
+                elif samtools_key == 'reads unmapped':
+                    if self.unmapped_excluded_reads != None:
+                        # filtering in effect; unmapped reads excluded by alignment quality filter
+                        val = self.unmapped_excluded_reads
+                        if int(row[2]) != 0:
+                            # This *should* never happen, but just in case it does
+                            msg = "WARNING: %s reads were unmapped AND had alignment scores "+\
+                                  "> %d; not counted in 'unmapped reads' total. Inconsistent "+\
+                                  "data in BAM input?\n" % (row[2], self.trim_quality)
+                            sys.stderr.write(msg)
+                    else:
+                        # no quality filtering; use unmapped reads count from main input
+                        val = int(row[2])
+                elif samtools_key in float_keys:
+                    val = float(row[2])
+                else:
+                    val = int(row[2])
                 metrics[key_map[samtools_key]] = val
         metrics['average read length'] = self.mean_read_length(stored['RL'])
         metrics['paired end'] = metrics['paired reads'] > 0
@@ -267,6 +294,19 @@ class bam_qc:
         metrics['read 2 quality histogram'] = lfq_histogram
         metrics['pairsMappedAbnormallyFar'] = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         return metrics
+
+    def find_unmapped_reads(self, bam_path):
+        result = pysam.stats(bam_path)
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
+            delimiter="\t"
+        )
+        unmapped = 0
+        for row in reader:
+            if row[0]=='SN' and row[1]=='reads unmapped:':
+                unmapped = int(row[2])
+                break
+        return unmapped
 
     def fq_stats(self, rows):
         '''
@@ -289,13 +329,13 @@ class bam_qc:
             meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
         return (meanByCyc, histogram)
 
-    def generate_downsampled_bam(self, bam_path):
+    def generate_downsampled_bam(self, bam_path, sample_rate):
         '''
         Write a temporary downsampled BAM file for all subsequent input
 
         This is fully deterministic -- for sample rate N, takes every (N*2)th pair of reads
         '''
-        if self.sample_rate == 1:
+        if sample_rate == 1:
             sys.stderr.write("Sample rate = 1, omitting down sampling\n")
             return bam_path
         sorted_bam_path = os.path.join(self.tmpdir, 'sorted.bam')
@@ -307,7 +347,7 @@ class bam_qc:
         count = 0
         # sample two reads at a time -- should be read 1 and read 2, if read is paired
         # first read is odd-numbered (should be read 1), second is even-numbered (read 2)
-        interval = self.sample_rate * 2
+        interval = sample_rate * 2
         sample_next = False
         sampled = 0
         for read in bam_in:
