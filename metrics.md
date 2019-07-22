@@ -2,6 +2,8 @@
 
 BamQC metrics are computed using a number of methods, including third-party software tools, and output in JSON format. The output also contains metadata, such as the instrument and lane names; and input parameters, such as the target file. This document summarizes how metrics are computed, and details some special cases of interest.
 
+Some metrics have been renamed in the move from the old Perl to new Python implementation.
+
 ## Summary of fields
 
 | Name                            | Former name             | Source                  |
@@ -77,7 +79,7 @@ BamQC metrics are computed using a number of methods, including third-party soft
 
 - `samtools` and `bedtools` are wrapped by the Python packages `pysam` and `pybedtools`, respectively.
 - `pysam` is also used for processing CIGAR strings.
-- `pairsMappedAbnormallyFar` is a secondary metric, computed from the insert size histogram, which in turn is derived from `samtools` stats. In this instance, 'abnormal' is defined by the `insert max` parameter.
+- `pairsMappedAbnormallyFar` is a secondary metric, computed from the insert size histogram, which in turn is derived from `samtools stats`. In this instance, 'abnormal' is defined by the `insert max` parameter.
 
 ## Filtering
 
