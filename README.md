@@ -17,11 +17,9 @@ Run the script `bin/run_bam_qc.py` with `--help` for instructions.
 
 Run `test/test.py` for Python tests.
 
-## Note on sequence mismatches
+## Metric notes
 
-The `mismatched bases` field may not be consistent with the mismatch-by-cycle fields for each read.
-
-The former is derived from `samtools stats`; the latter from CIGAR strings. The CIGAR operation M for 'alignment match' may represent a sequence match or mismatch. So, the CIGAR string does not necessarily record all mismatches. In the event of inconsistency, `mismatched bases` should be taken as correct.
+See `metrics.md` for a detailed account of the metrics in use.
 
 ## Conventions
 
