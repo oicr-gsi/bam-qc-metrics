@@ -19,17 +19,7 @@ Run `test/test.py` for Python tests.
 
 ## Metric notes
 
-### Unmapped reads
-
-If a mapping quality filter is given (using the -q option), all metrics are calculated *after* the filter is applied, *except* for unmapped reads.
-
-Unmapped reads have no mapping score by definition. So unmapped reads are counted *after* downsampling but *before* quality filtering.
-
-### Sequence mismatches
-
-The `mismatched bases` field may not be consistent with the mismatch-by-cycle fields for each read.
-
-The former is derived from `samtools stats`; the latter from CIGAR strings. The CIGAR operation M for 'alignment match' may represent a sequence match or mismatch. So, the CIGAR string does not necessarily record all mismatches. In the event of inconsistency, `mismatched bases` should be taken as correct.
+See `metrics.md` for a detailed account of the metrics in use.
 
 ## Conventions
 
