@@ -1,13 +1,16 @@
 CHANGELOG
 =========
 
-v0.1.2 : 2019-07-18
+v0.1.2 : 2019-07-23
 -------------------
 
 Fixed:
 - Count unmapped reads before, not after mapping quality filter is applied
 - If read is aligned to reverse strand, also reverse order of CIGAR tuple
 - Fixups for reading `mark_duplicates` text file
+
+Added:
+- Metric specifications document `metrics.md`
 
 Changed:
 - Initialize all instance variables at start of `__init__()` in `bam_qc.py`
