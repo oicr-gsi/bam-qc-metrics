@@ -46,11 +46,14 @@ class test(unittest.TestCase):
         self.assertEqual(output, expected)
         qc.cleanup()
 
-    def test_missing_library_size(self):
-        # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
-        # test input file also has variant '## METRICS CLASS ...' line
+    def test_missing_inputs(self):
+        # test possible missing inputs:
+        # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
+        # - FFQ/LFQ in samtools stats
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
                     self.markdup_path_low_cover, self.quality)
+        # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
+        # test input file also has variant '## METRICS CLASS ...' line
         metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)
         with (open(self.expected_metrics_low_cover)) as f: metrics_expected = json.loads(f.read())
         # Don't directly compare found/expected HISTOGRAM values. Keys are integers and strings, respectively.
@@ -63,6 +66,10 @@ class test(unittest.TestCase):
         del metrics_found['HISTOGRAM']
         del metrics_expected['HISTOGRAM']
         self.assertEqual(metrics_found, metrics_expected)
+        # test empty FFQ/LFQ result from samtools stats; may occur for small input datasets
+        fq_result = qc.fq_stats([])
+        fq_expected = ({},{})
+        self.assertEqual(fq_expected, fq_result)
         qc.cleanup()
         
     def tearDown(self):

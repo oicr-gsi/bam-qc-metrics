@@ -315,18 +315,20 @@ class bam_qc:
             - Quality histogram
         '''
         meanByCyc = {}
-        max_width = max([len(row) for row in rows])
-        histogram = {q: 0 for q in range(max_width-2)}
-        for row in rows:
-            cycle = int(row[1])
-            counts = [int(n) for n in row[2:]]
-            total = 0
-            count = 0
-            for qscore in range(len(counts)):
-                total += counts[qscore]*qscore
-                count += counts[qscore]
-                histogram[qscore] += counts[qscore]
-            meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
+        histogram = {}
+        if len(rows) > 0:
+            max_width = max([len(row) for row in rows])
+            histogram = {q: 0 for q in range(max_width-2)}
+            for row in rows:
+                cycle = int(row[1])
+                counts = [int(n) for n in row[2:]]
+                total = 0
+                count = 0
+                for qscore in range(len(counts)):
+                    total += counts[qscore]*qscore
+                    count += counts[qscore]
+                    histogram[qscore] += counts[qscore]
+                meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
         return (meanByCyc, histogram)
 
     def generate_downsampled_bam(self, bam_path, sample_rate):
