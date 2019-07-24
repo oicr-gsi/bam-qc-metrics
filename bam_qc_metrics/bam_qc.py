@@ -90,8 +90,10 @@ class bam_qc:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
         self.samtools_metrics = self.evaluate_samtools_metrics()
-        read1_length = max(self.samtools_metrics['read 1 length histogram'].keys())
-        read2_length = max(self.samtools_metrics['read 2 length histogram'].keys())
+        read1_hist = self.samtools_metrics['read 1 length histogram']
+        read2_hist = self.samtools_metrics['read 1 length histogram']
+        read1_length = max(read1_hist.keys()) if len(read1_hist) > 0 else 0
+        read2_length = max(read2_hist.keys()) if len(read2_hist) > 0 else 0
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
 
     def cleanup(self):
