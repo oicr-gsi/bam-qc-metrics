@@ -89,12 +89,15 @@ class bam_qc:
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
-        self.samtools_metrics = self.evaluate_samtools_metrics()
+        samtools_stats = pysam.stats(self.qc_input_bam_path)
+        self.samtools_metrics = self.evaluate_samtools_metrics(samtools_stats)
+        # max_read_length needed if no reads are classified as read1 or read2
+        max_read_length = self.evaluate_max_read_length(samtools_stats)
         read1_hist = self.samtools_metrics['read 1 length histogram']
-        read2_hist = self.samtools_metrics['read 1 length histogram']
+        read2_hist = self.samtools_metrics['read 2 length histogram']
         read1_length = max(read1_hist.keys()) if len(read1_hist) > 0 else 0
         read2_length = max(read2_hist.keys()) if len(read2_hist) > 0 else 0
-        self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length)
+        self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length, max_read_length)
 
     def cleanup(self):
         '''
@@ -131,10 +134,12 @@ class bam_qc:
         #print(coverage)
         return metrics
         
-    def evaluate_custom_metrics(self, read1_length, read2_length):
+    def evaluate_custom_metrics(self, read1_length, read2_length, max_read_length):
         '''
         Iterate over the BAM file to compute custom metrics
         Processes CIGAR strings; see p. 7 of https://samtools.github.io/hts-specs/SAMv1.pdf
+        read1_length and read2_length may be zero (if all data is 'unknown read'),
+        so we supply max_read_length separately
         '''
         # Relevant CIGAR operations
         op_names = {
@@ -152,11 +157,14 @@ class bam_qc:
             'readsMissingMDtags': 0,
         }
         read_names = ['1', '2', '?']
-        read_lengths = [read1_length, read2_length, max(read1_length, read2_length)]
+        read_lengths = [read1_length, read2_length, max_read_length]
         for op_name in op_names.values():
             for i in range(len(read_names)):
                 key = 'read %s %s by cycle' % (read_names[i], op_name)
-                metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
+                if read_lengths[i] == 0:
+                    metrics[key] = {} # placeholder
+                else:
+                    metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
         # metrics for unknown reads -- equivalents for reads 1 and 2 are derived from samtools
         ur_count = 0
         ur_length_total = 0
@@ -169,6 +177,9 @@ class bam_qc:
         for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
+            if read.query_length == 0: # all bases are hard clipped
+                 metrics['hard clip bases'] += read.infer_read_length()
+                 continue
             cycle = 1
             read_index = None
             if read.is_read1: read_index = self.READ_1_INDEX
@@ -213,7 +224,23 @@ class bam_qc:
         metrics['read ? quality histogram'] = ur_quality_histogram
         return metrics
 
-    def evaluate_samtools_metrics(self):
+    def evaluate_max_read_length(self, samtools_result):
+        '''
+        Find max read length from samtools stats.
+        Not part of metric output, but needed to evaluate custom metrics.
+        '''
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_result)),
+            delimiter="\t"
+        )
+        max_read_length = 0
+        for row in reader:
+            if row[0] == 'SN' and row[1] == 'maximum length:':
+                max_read_length = int(row[2])
+                break
+        return max_read_length
+
+    def evaluate_samtools_metrics(self, samtools_result):
         '''Process metrics derived from samtools output'''
         # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
         float_keys = set([
@@ -247,9 +274,8 @@ class bam_qc:
         labels_to_store = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
         stored = {} # store selected rows for later processing
         for label in labels_to_store: stored[label] = []
-        result = pysam.stats(self.qc_input_bam_path)
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_result)),
             delimiter="\t"
         )
         for row in reader:
