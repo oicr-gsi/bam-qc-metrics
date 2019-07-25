@@ -14,7 +14,9 @@ Added:
 - Sanity checks on output variables in Python tests
 
 Changed:
+- Run `samtools stats` _before_ downsampling and _after_ quality filtering (if any)
 - Rename `trim_quality` parameter as `skip_below_mapq`
+- Replace obsolete `distutils` with `setuptools` in setup.py
 
 
 v0.1.2 : 2019-07-23
