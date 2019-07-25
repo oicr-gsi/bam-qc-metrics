@@ -103,11 +103,11 @@ class bam_qc:
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length, max_read_length)
 
     def cleanup(self):
-        '''
+        """
         Temporary directory object (if any) will be automatically deleted when bam_qc object
         is out of scope. This method allows explicit cleanup, eg. to avoid warnings in the
         test harness.
-        '''
+        """
         if self.tmp_object != None:
             self.tmp_object.cleanup()
         else:
@@ -138,12 +138,12 @@ class bam_qc:
         return metrics
         
     def evaluate_custom_metrics(self, read1_length, read2_length, max_read_length):
-        '''
+        """
         Iterate over the BAM file to compute custom metrics
         Processes CIGAR strings; see p. 7 of https://samtools.github.io/hts-specs/SAMv1.pdf
         read1_length and read2_length may be zero (if all data is 'unknown read'),
         so we supply max_read_length separately
-        '''
+        """
         # Relevant CIGAR operations
         op_names = {
             0: 'aligned',
@@ -228,10 +228,10 @@ class bam_qc:
         return metrics
 
     def evaluate_max_read_length(self, samtools_stats):
-        '''
+        """
         Find max read length from samtools stats output.
         Not part of JSON output, but needed to evaluate custom metrics.
-        '''
+        """
         reader = csv.reader(
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
             delimiter="\t"
@@ -244,10 +244,10 @@ class bam_qc:
         return max_read_length
 
     def evaluate_reads_per_start_point(self):
-        '''
+        """
         Find reads per start point, defined as (unique reads)/(unique start points)
         Requires two additional passes through the BAM file
-        '''
+        """
         reads_per_sp = None
         # count the reads, excluding secondary alignments and unmapped reads
         unique_reads = int(pysam.view('-c', '-F', '260', self.qc_input_bam_path).strip())
@@ -269,7 +269,7 @@ class bam_qc:
         return reads_per_sp
 
     def evaluate_samtools_metrics(self, samtools_stats):
-        '''Process metrics derived from samtools output'''
+        """Process metrics derived from samtools output"""
         # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
         float_keys = set([
             'error rate',
@@ -365,11 +365,11 @@ class bam_qc:
         return unmapped
 
     def fq_stats(self, rows):
-        '''
+        """
         Compute quality metrics from either FFQ or LFQ entries in samtools stats:
             - Mean quality by cycle
             - Quality histogram
-        '''
+        """
         meanByCyc = {}
         histogram = {}
         if len(rows) > 0:
@@ -388,11 +388,11 @@ class bam_qc:
         return (meanByCyc, histogram)
 
     def generate_downsampled_bam(self, bam_path, sample_rate):
-        '''
+        """
         Write a temporary downsampled BAM file for all subsequent input
 
         This is fully deterministic -- for sample rate N, takes every (N*2)th pair of reads
-        '''
+        """
         if sample_rate == 1:
             sys.stderr.write("Sample rate = 1, omitting down sampling\n")
             return bam_path
@@ -425,7 +425,7 @@ class bam_qc:
         return sampled_bam_path
 
     def mean_read_length(self, rows):
-        '''Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length'''
+        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length"""
         total = 0
         count = 0
         for row in rows:
@@ -437,7 +437,7 @@ class bam_qc:
         return mean_rl
 
     def read_length_histogram(self, rows):
-        '''Process RL (read length), FRL (first RL) or LRL (last RL) rows for read length histogram'''
+        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for read length histogram"""
         histogram = {}
         for row in rows:
             histogram[int(row[1])] = int(row[2])
