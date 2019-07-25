@@ -30,19 +30,21 @@ class test(unittest.TestCase):
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
         with (open(out_path)) as f: output = json.loads(f.read())
-        with (open(self.expected_path)) as f: expected = json.loads(f.read())
-        self.assertEqual(output, expected)
         # do individual sanity checks on some variables
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 315,
             "reads per start point": 1.031,
+            "readsMissingMDtags": 80020,
             "sample rate": 1,
             "total reads": 80020,
             "total target size": 527189,
         }
         for key in expected_variables.keys():
             self.assertEqual(expected_variables[key], output[key])
+        # now check all output data
+        with (open(self.expected_path)) as f: expected = json.loads(f.read())
+        self.assertEqual(output, expected)
         qc.cleanup()
         
     def test_downsampled_analysis(self):
@@ -53,19 +55,21 @@ class test(unittest.TestCase):
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
         with (open(out_path)) as f: output = json.loads(f.read())
-        with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
-        self.assertEqual(output, expected)
         # do individual sanity checks on some variables
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
-            "inserted bases": 29,
-            "reads per start point": 1.0,
+            "inserted bases": 315,
+            "reads per start point": 1.0, # downsampled
+            "readsMissingMDtags": 8002, # downsampled
             "sample rate": 10,
-            "total reads": 8002,
-            "total target size": 527189, # metadata not expected to change
+            "total reads": 80020,
+            "total target size": 527189,
         }
         for key in expected_variables.keys():
             self.assertEqual(expected_variables[key], output[key])
+        # now check all output data
+        with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
+        self.assertEqual(output, expected)
         qc.cleanup()
 
     def test_missing_inputs(self):

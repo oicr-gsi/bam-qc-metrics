@@ -55,31 +55,35 @@ class bam_qc:
             self.tmpdir = self.tmp_object.name
         else:
             self.tmpdir = tmpdir
-        # apply downsampling (if any)
-        if sample_rate != None and sample_rate > 1:
-            self.sample_rate = sample_rate
-            unfiltered_bam_path = self.generate_downsampled_bam(bam_path, self.sample_rate)
-        else:
-            unfiltered_bam_path = bam_path
+        # TODO subroutines to apply mapq filter and downsample?
         # apply quality filter (if any)
-        excluded_reads_path = os.path.join(self.tmpdir, 'excluded.bam')
+        excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
+        included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
+        ds_input_path = None # input to downsampling
         if self.skip_below_mapq != None and self.skip_below_mapq > 0:
-            self.qc_input_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
-            pysam.view(unfiltered_bam_path,
+            pysam.view(bam_path,
                        '-b',
                        '-q', str(self.skip_below_mapq),
-                       '-o', self.qc_input_bam_path,
-                       '-U', excluded_reads_path,
+                       '-o', included_by_mapq_path,
+                       '-U', excluded_by_mapq_path,
                        catch_stdout=False)
-            self.qual_fail_reads = int(pysam.view('-c', excluded_reads_path).strip())
+            self.qual_fail_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
             # unmapped reads will fail the mapping quality filter, by definition
             # so if the quality filter is applied, find unmapped total from the excluded reads
-            self.unmapped_excluded_reads = self.find_unmapped_reads(excluded_reads_path)
-            if self.sample_rate != 1:
-                os.remove(unfiltered_bam_path) # downsampled, unfiltered file is no longer needed
+            self.unmapped_excluded_reads = self.find_unmapped_reads(excluded_by_mapq_path)
+            ds_input_path = included_by_mapq_path
         else:
-            self.qc_input_bam_path = unfiltered_bam_path
             self.qual_fail_reads = 0
+            ds_input_path = bam_path
+        # run samtools stats -- after filtering, before downsampling
+        samtools_stats = pysam.stats(ds_input_path)
+        # apply downsampling (if any)
+        #  self.qc_input_bam_path is input to all subsequent QC steps
+        if sample_rate != None and sample_rate > 1:
+            self.sample_rate = sample_rate
+            self.qc_input_bam_path = self.generate_downsampled_bam(ds_input_path, self.sample_rate)
+        else:
+            self.qc_input_bam_path = ds_input_path
         # read required keys from metadata (if any)
         if metadata_path != None:
             with open(metadata_path) as f: raw_metadata = json.loads(f.read())
@@ -92,7 +96,6 @@ class bam_qc:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
         self.reads_per_start_point = self.evaluate_reads_per_start_point()
-        samtools_stats = pysam.stats(self.qc_input_bam_path)
         self.samtools_metrics = self.evaluate_samtools_metrics(samtools_stats)
         # max_read_length needed if no reads are classified as read1 or read2
         max_read_length = self.evaluate_max_read_length(samtools_stats)
