@@ -36,6 +36,7 @@ class test(unittest.TestCase):
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 315,
+            "reads per start point": 1.031,
             "sample rate": 1,
             "total reads": 80020,
             "total target size": 527189,
@@ -58,6 +59,7 @@ class test(unittest.TestCase):
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 29,
+            "reads per start point": 1.0,
             "sample rate": 10,
             "total reads": 8002,
             "total target size": 527189, # metadata not expected to change

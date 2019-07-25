@@ -16,6 +16,7 @@ class bam_qc:
         'sample'
     ]
     PRECISION = 1 # number of decimal places for rounded output
+    FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
     READ_1_INDEX = 0
     READ_2_INDEX = 1
     READ_UNKNOWN_INDEX = 2
@@ -41,6 +42,7 @@ class bam_qc:
         self.metadata = None
         self.qc_input_bam_path = None
         self.qual_fail_reads = None
+        self.reads_per_start_point = None
         self.sample_rate = 1
         self.samtools_metrics = None
         self.target_path = target_path
@@ -89,6 +91,7 @@ class bam_qc:
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
+        self.reads_per_start_point = self.evaluate_reads_per_start_point()
         samtools_stats = pysam.stats(self.qc_input_bam_path)
         self.samtools_metrics = self.evaluate_samtools_metrics(samtools_stats)
         # max_read_length needed if no reads are classified as read1 or read2
@@ -224,13 +227,13 @@ class bam_qc:
         metrics['read ? quality histogram'] = ur_quality_histogram
         return metrics
 
-    def evaluate_max_read_length(self, samtools_result):
+    def evaluate_max_read_length(self, samtools_stats):
         '''
-        Find max read length from samtools stats.
-        Not part of metric output, but needed to evaluate custom metrics.
+        Find max read length from samtools stats output.
+        Not part of JSON output, but needed to evaluate custom metrics.
         '''
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_result)),
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
             delimiter="\t"
         )
         max_read_length = 0
@@ -240,7 +243,32 @@ class bam_qc:
                 break
         return max_read_length
 
-    def evaluate_samtools_metrics(self, samtools_result):
+    def evaluate_reads_per_start_point(self):
+        '''
+        Find reads per start point, defined as (unique reads)/(unique start points)
+        Requires two additional passes through the BAM file
+        '''
+        reads_per_sp = None
+        # count the reads, excluding secondary alignments and unmapped reads
+        unique_reads = int(pysam.view('-c', '-F', '260', self.qc_input_bam_path).strip())
+        # start point is determined by fields 3 and 4 of the BAM record:
+        # reference sequence name and mapping position, respectively
+        # finding unique start points on the command line:
+        # samtools view $BAM_FILE | cut -f3,4 | sort | uniq | wc -l
+        start_point_set = set()
+        for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
+            if read.is_unmapped:
+                continue
+            else:
+                start_point_set.add((read.reference_name, read.reference_start))
+        start_points = len(start_point_set)
+        if start_points > 0:
+            reads_per_sp = round(float(unique_reads)/start_points, self.FINE_PRECISION)
+        else:
+            reads_per_sp = 0.0
+        return reads_per_sp
+
+    def evaluate_samtools_metrics(self, samtools_stats):
         '''Process metrics derived from samtools output'''
         # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
         float_keys = set([
@@ -275,7 +303,7 @@ class bam_qc:
         stored = {} # store selected rows for later processing
         for label in labels_to_store: stored[label] = []
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_result)),
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
             delimiter="\t"
         )
         for row in reader:
@@ -476,12 +504,13 @@ class bam_qc:
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
+        output['insert max'] = self.expected_insert_max
+        output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq
         output['qual fail reads'] = self.qual_fail_reads
-        output['mark duplicates'] = self.mark_duplicates_metrics
-        output['target file'] = os.path.split(self.target_path)[-1]
         output['sample rate'] = self.sample_rate
-        output['insert max'] = self.expected_insert_max
+        output['target file'] = os.path.split(self.target_path)[-1]
+        output['reads per start point'] = self.reads_per_start_point
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
