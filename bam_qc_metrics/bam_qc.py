@@ -21,7 +21,7 @@ class bam_qc:
     READ_UNKNOWN_INDEX = 2
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
-                 mark_duplicates_path=None, trim_quality=None, sample_rate=None, tmpdir=None):
+                 mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, tmpdir=None):
         # define instance variables
         self.bedtools_metrics = None
         self.custom_metrics = None
@@ -44,7 +44,7 @@ class bam_qc:
         self.sample_rate = 1
         self.samtools_metrics = None
         self.target_path = target_path
-        self.trim_quality = trim_quality
+        self.skip_below_mapq = skip_below_mapq
         self.tmp_object = None
         self.unmapped_excluded_reads = None
         # set up temporary directory
@@ -61,11 +61,11 @@ class bam_qc:
             unfiltered_bam_path = bam_path
         # apply quality filter (if any)
         excluded_reads_path = os.path.join(self.tmpdir, 'excluded.bam')
-        if self.trim_quality != None and self.trim_quality > 0:
+        if self.skip_below_mapq != None and self.skip_below_mapq > 0:
             self.qc_input_bam_path = os.path.join(self.tmpdir, 'filtered.bam')
             pysam.view(unfiltered_bam_path,
                        '-b',
-                       '-q', str(self.trim_quality),
+                       '-q', str(self.skip_below_mapq),
                        '-o', self.qc_input_bam_path,
                        '-U', excluded_reads_path,
                        catch_stdout=False)
@@ -298,7 +298,7 @@ class bam_qc:
                             # This *should* never happen, but just in case it does
                             msg = "WARNING: %s reads were unmapped AND had alignment scores "+\
                                   "> %d; not counted in 'unmapped reads' total. Inconsistent "+\
-                                  "data in BAM input?\n" % (row[2], self.trim_quality)
+                                  "data in BAM input?\n" % (row[2], self.skip_below_mapq)
                             sys.stderr.write(msg)
                     else:
                         # no quality filtering; use unmapped reads count from main input
@@ -476,7 +476,7 @@ class bam_qc:
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
-        output['qual cut'] = self.trim_quality
+        output['qual cut'] = self.skip_below_mapq
         output['qual fail reads'] = self.qual_fail_reads
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['target file'] = os.path.split(self.target_path)[-1]
