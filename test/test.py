@@ -23,7 +23,7 @@ class test(unittest.TestCase):
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         #self.maxDiff = None # uncomment to show the (very long) full output diff
 
-    def test(self):
+    def test_default_analysis(self):
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
                     self.markdup_path, self.quality)
         out_path = os.path.join(self.tmpdir, 'out.json')
@@ -32,9 +32,19 @@ class test(unittest.TestCase):
         with (open(out_path)) as f: output = json.loads(f.read())
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
+        expected_variables = {
+            "inserted bases": 315,
+            "sample rate": 1,
+            "total reads": 80020,
+            "total target size": 527189,
+        }
+        for key in expected_variables.keys():
+            self.assertEqual(expected_variables[key], output[key])
         qc.cleanup()
         
-    def test_downsample(self):
+    def test_downsampled_analysis(self):
         sample_rate = 10
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
                     self.markdup_path, self.quality, sample_rate=sample_rate)
@@ -44,6 +54,16 @@ class test(unittest.TestCase):
         with (open(out_path)) as f: output = json.loads(f.read())
         with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
+        expected_variables = {
+            "inserted bases": 29,
+            "sample rate": 10,
+            "total reads": 8002,
+            "total target size": 527189, # metadata not expected to change
+        }
+        for key in expected_variables.keys():
+            self.assertEqual(expected_variables[key], output[key])
         qc.cleanup()
 
     def test_missing_inputs(self):
@@ -56,7 +76,7 @@ class test(unittest.TestCase):
         # test input file also has variant '## METRICS CLASS ...' line
         metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)
         with (open(self.expected_metrics_low_cover)) as f: metrics_expected = json.loads(f.read())
-        # Don't directly compare found/expected HISTOGRAM values. Keys are integers and strings, respectively.
+        # Found/expected HISTOGRAM keys are integers and strings, respectively.
         # (Annoyingly, JSON format insists dictionary keys must be strings)
         histogram_found = metrics_found['HISTOGRAM']
         histogram_expected = metrics_expected['HISTOGRAM']
