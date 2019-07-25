@@ -1,6 +1,22 @@
 CHANGELOG
 =========
 
+Unreleased
+----------
+
+Fixed:
+- Use correct read length if all data is 'unknown read'
+- Correctly handle empty read length histogram
+- Correctly handle missing FFQ/LFQ in samtools stats
+
+Added:
+- 'Reads per start point' metric
+- Sanity checks on output variables in Python tests
+
+Changed:
+- Rename `trim_quality` parameter as `skip_below_mapq`
+
+
 v0.1.2 : 2019-07-23
 -------------------
 
