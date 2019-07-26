@@ -1,6 +1,25 @@
 CHANGELOG
 =========
 
+v0.1.3: 2019-07-26
+------------------
+
+Fixed:
+- Use correct read length if all data is 'unknown read'
+- Correctly handle empty read length histogram
+- Correctly handle missing FFQ/LFQ in samtools stats
+
+Added:
+- 'Reads per start point' metric
+- Sanity checks on output variables in Python tests
+
+Changed:
+- Run `samtools stats` _before_ downsampling and _after_ quality filtering (if any)
+- Do downsampling using `samtools view` and a random seed instead of iterating over the reads
+- Rename `trim_quality` parameter as `skip_below_mapq`
+- Replace obsolete `distutils` with `setuptools` in setup.py
+
+
 v0.1.2 : 2019-07-23
 -------------------
 

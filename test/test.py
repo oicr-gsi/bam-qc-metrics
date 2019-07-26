@@ -23,37 +23,67 @@ class test(unittest.TestCase):
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         #self.maxDiff = None # uncomment to show the (very long) full output diff
 
-    def test(self):
+    def test_default_analysis(self):
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path, self.quality)
+                    self.markdup_path, self.quality, tmpdir=self.tmpdir, verbose=False)
         out_path = os.path.join(self.tmpdir, 'out.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
         with (open(out_path)) as f: output = json.loads(f.read())
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
+        expected_variables = {
+            "inserted bases": 315,
+            "reads per start point": 1.031,
+            "readsMissingMDtags": 80020,
+            "sample rate": 1,
+            "total reads": 80020,
+            "total target size": 527189,
+        }
+        for key in expected_variables.keys():
+            self.assertEqual(expected_variables[key], output[key])
+        # now check all output data
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
         qc.cleanup()
         
-    def test_downsample(self):
+    def test_downsampled_analysis(self):
         sample_rate = 10
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path, self.quality, sample_rate=sample_rate)
+                    self.markdup_path, self.quality, sample_rate=sample_rate,
+                    tmpdir=self.tmpdir, verbose=False)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
         with (open(out_path)) as f: output = json.loads(f.read())
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
+        expected_variables = {
+            "inserted bases": 315,
+            "reads per start point": 1.002, # downsampled
+            "readsMissingMDtags": 7874, # downsampled
+            "sample rate": 10,
+            "total reads": 80020,
+            "total target size": 527189,
+        }
+        for key in expected_variables.keys():
+            self.assertEqual(expected_variables[key], output[key])
+        # now check all output data
         with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
         qc.cleanup()
 
-    def test_missing_library_size(self):
+    def test_missing_inputs(self):
+        # test possible missing inputs:
+        # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
+        # - FFQ/LFQ in samtools stats
+        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
+                    self.markdup_path_low_cover, self.quality, tmpdir=self.tmpdir, verbose=False)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
         # test input file also has variant '## METRICS CLASS ...' line
-        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path_low_cover, self.quality)
         metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)
         with (open(self.expected_metrics_low_cover)) as f: metrics_expected = json.loads(f.read())
-        # Don't directly compare found/expected HISTOGRAM values. Keys are integers and strings, respectively.
+        # Found/expected HISTOGRAM keys are integers and strings, respectively.
         # (Annoyingly, JSON format insists dictionary keys must be strings)
         histogram_found = metrics_found['HISTOGRAM']
         histogram_expected = metrics_expected['HISTOGRAM']
@@ -63,6 +93,10 @@ class test(unittest.TestCase):
         del metrics_found['HISTOGRAM']
         del metrics_expected['HISTOGRAM']
         self.assertEqual(metrics_found, metrics_expected)
+        # test empty FFQ/LFQ result from samtools stats; may occur for small input datasets
+        fq_result = qc.fq_stats([])
+        fq_expected = ({},{})
+        self.assertEqual(fq_expected, fq_result)
         qc.cleanup()
         
     def tearDown(self):
