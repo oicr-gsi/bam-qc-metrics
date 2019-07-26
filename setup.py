@@ -6,7 +6,7 @@ from setuptools import setup
 
 setup(
     name="bam-qc-metrics",
-    version="0.1.3",
+    version="0.1.4",
     scripts=['bin/run_bam_qc.py', ],
     packages=['bam_qc_metrics'],
     install_requires=['attrs', 'jsonschema', 'pybedtools', 'pyrsistent', 'pysam', 'six'],

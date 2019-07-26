@@ -1,6 +1,13 @@
 CHANGELOG
 =========
 
+v0.1.4: 2019-07-26
+------------------
+
+Fixed:
+- Bug in downsampling; `samtools view` expects downsample rate as decimal, not integer
+
+
 v0.1.3: 2019-07-26
 ------------------
 
