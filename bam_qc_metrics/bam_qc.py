@@ -387,11 +387,18 @@ class bam_qc:
         if sample_rate == 1:
             if self.verbose: sys.stderr.write("Sample rate = 1, omitting down sampling\n")
             downsampled_path = bam_path
+        elif sample_rate < 1:
+            raise ValueError("Sample rate cannot be less than 1")
         else:
+            # We are sampling every Nth read
+            # Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
+            # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
             downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
-            sample_arg = '%d.%d' % (self.RANDOM_SEED, sample_rate)
+            sample_decimal = round(1.0/sample_rate, self.FINE_PRECISION)
+            sample_arg = str(self.RANDOM_SEED + sample_decimal)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
+            # TODO Report size of downsampled file in JSON output?
             sampled = int(pysam.view('-c', downsampled_path).strip())
             if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
                 sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
