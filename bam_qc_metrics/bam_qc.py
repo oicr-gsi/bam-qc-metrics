@@ -117,7 +117,8 @@ class bam_qc:
         """
         if self.tmp_object != None:
             self.tmp_object.cleanup()
-        elif self.verbose: sys.stderr.write("Omitting cleanup for user-specified temporary directory %s\n" % self.tmpdir)
+        elif self.verbose:
+            sys.stderr.write("Omitting cleanup for user-specified temporary directory %s\n" % self.tmpdir)
 
     def count_mapped_abnormally_far(self, insert_size_histogram):
         count = 0
