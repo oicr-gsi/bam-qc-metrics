@@ -17,13 +17,14 @@ class bam_qc:
     ]
     PRECISION = 1 # number of decimal places for rounded output
     FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
+    RANDOM_SEED = 42
     READ_1_INDEX = 0
     READ_2_INDEX = 1
     READ_UNKNOWN_INDEX = 2
     START_POINTS_KEY = 'start points'
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
-                 mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, tmpdir=None):
+                 mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, tmpdir=None, verbose=True):
         # define instance variables
         self.bedtools_metrics = None
         self.custom_metrics = None
@@ -50,13 +51,13 @@ class bam_qc:
         self.skip_below_mapq = skip_below_mapq
         self.tmp_object = None
         self.unmapped_excluded_reads = None
+        self.verbose = verbose # if False, suppress non-critical messages to stderr
         # set up temporary directory
         if tmpdir==None:
             self.tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
             self.tmpdir = self.tmp_object.name
         else:
             self.tmpdir = tmpdir
-        # TODO subroutines to apply mapq filter and downsample?
         # apply quality filter (if any)
         excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
         included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
@@ -71,7 +72,8 @@ class bam_qc:
             self.qual_fail_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
             # unmapped reads will fail the mapping quality filter, by definition
             # so if the quality filter is applied, find unmapped total from the excluded reads
-            self.unmapped_excluded_reads = self.find_unmapped_reads(excluded_by_mapq_path)
+            unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
+            self.unmapped_excluded_reads = int(unmapped_raw.strip())
             ds_input_path = included_by_mapq_path
         else:
             self.qual_fail_reads = 0
@@ -79,7 +81,7 @@ class bam_qc:
         # run samtools stats -- after filtering, before downsampling
         samtools_stats = pysam.stats(ds_input_path)
         # apply downsampling (if any)
-        #  self.qc_input_bam_path is input to all subsequent QC steps
+        # self.qc_input_bam_path is input to all subsequent QC steps
         if sample_rate != None and sample_rate > 1:
             self.sample_rate = sample_rate
             self.qc_input_bam_path = self.generate_downsampled_bam(ds_input_path, self.sample_rate)
@@ -90,7 +92,7 @@ class bam_qc:
             with open(metadata_path) as f: raw_metadata = json.loads(f.read())
             self.metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
         else:
-            sys.stderr.write("Metadata file not given, using empty defaults\n")
+            if self.verbose: sys.stderr.write("Metadata file not given, using empty defaults\n")
             self.metadata = {key: None for key in self.METADATA_KEYS}
         # find metrics
         if mark_duplicates_path != None:
@@ -115,7 +117,7 @@ class bam_qc:
         """
         if self.tmp_object != None:
             self.tmp_object.cleanup()
-        else:
+        elif self.verbose:
             sys.stderr.write("Omitting cleanup for user-specified temporary directory %s\n" % self.tmpdir)
 
     def count_mapped_abnormally_far(self, insert_size_histogram):
@@ -354,19 +356,6 @@ class bam_qc:
         metrics['pairsMappedAbnormallyFar'] = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         return metrics
 
-    def find_unmapped_reads(self, bam_path):
-        result = pysam.stats(bam_path)
-        reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
-            delimiter="\t"
-        )
-        unmapped = 0
-        for row in reader:
-            if row[0]=='SN' and row[1]=='reads unmapped:':
-                unmapped = int(row[2])
-                break
-        return unmapped
-
     def fq_stats(self, rows):
         """
         Compute quality metrics from either FFQ or LFQ entries in samtools stats:
@@ -392,40 +381,28 @@ class bam_qc:
 
     def generate_downsampled_bam(self, bam_path, sample_rate):
         """
-        Write a temporary downsampled BAM file for all subsequent input
-
-        This is fully deterministic -- for sample rate N, takes every (N*2)th pair of reads
+        Write a temporary downsampled BAM file
         """
+        downsampled_path = None
         if sample_rate == 1:
-            sys.stderr.write("Sample rate = 1, omitting down sampling\n")
-            return bam_path
-        sorted_bam_path = os.path.join(self.tmpdir, 'sorted.bam')
-        sampled_bam_path = os.path.join(self.tmpdir, 'downsampled.bam')
-        # ensure file is sorted by name, so pairs are together
-        pysam.sort('-n', '-o', sorted_bam_path, bam_path)
-        bam_in = pysam.AlignmentFile(sorted_bam_path)
-        bam_out = pysam.AlignmentFile(sampled_bam_path, 'wb', template=bam_in)
-        count = 0
-        # sample two reads at a time -- should be read 1 and read 2, if read is paired
-        # first read is odd-numbered (should be read 1), second is even-numbered (read 2)
-        interval = sample_rate * 2
-        sample_next = False
-        sampled = 0
-        for read in bam_in:
-            count += 1
-            if (count + 1) % interval == 0:
-                bam_out.write(read)
-                sampled += 1
-                sample_next = True
-            elif sample_next:
-                bam_out.write(read)
-                sample_next = False
-                sampled += 1
-        bam_in.close()
-        bam_out.close()
-        if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
-            sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
-        return sampled_bam_path
+            if self.verbose: sys.stderr.write("Sample rate = 1, omitting down sampling\n")
+            downsampled_path = bam_path
+        elif sample_rate < 1:
+            raise ValueError("Sample rate cannot be less than 1")
+        else:
+            # We are sampling every Nth read
+            # Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
+            # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
+            downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
+            sample_decimal = round(1.0/sample_rate, self.FINE_PRECISION)
+            sample_arg = str(self.RANDOM_SEED + sample_decimal)
+            pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
+            # sanity check on the downsampled file
+            # TODO Report size of downsampled file in JSON output?
+            sampled = int(pysam.view('-c', downsampled_path).strip())
+            if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
+                sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
+        return downsampled_path
 
     def mean_read_length(self, rows):
         """Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length"""

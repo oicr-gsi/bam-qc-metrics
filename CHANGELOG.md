@@ -1,8 +1,15 @@
 CHANGELOG
 =========
 
-Unreleased
-----------
+v0.1.4: 2019-07-26
+------------------
+
+Fixed:
+- Bug in downsampling; `samtools view` expects downsample rate as decimal, not integer
+
+
+v0.1.3: 2019-07-26
+------------------
 
 Fixed:
 - Use correct read length if all data is 'unknown read'
@@ -15,6 +22,7 @@ Added:
 
 Changed:
 - Run `samtools stats` _before_ downsampling and _after_ quality filtering (if any)
+- Do downsampling using `samtools view` and a random seed instead of iterating over the reads
 - Rename `trim_quality` parameter as `skip_below_mapq`
 - Replace obsolete `distutils` with `setuptools` in setup.py
 

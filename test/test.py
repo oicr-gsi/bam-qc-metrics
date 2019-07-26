@@ -25,7 +25,7 @@ class test(unittest.TestCase):
 
     def test_default_analysis(self):
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path, self.quality)
+                    self.markdup_path, self.quality, tmpdir=self.tmpdir, verbose=False)
         out_path = os.path.join(self.tmpdir, 'out.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -50,7 +50,8 @@ class test(unittest.TestCase):
     def test_downsampled_analysis(self):
         sample_rate = 10
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path, self.quality, sample_rate=sample_rate)
+                    self.markdup_path, self.quality, sample_rate=sample_rate,
+                    tmpdir=self.tmpdir, verbose=False)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -59,8 +60,8 @@ class test(unittest.TestCase):
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 315,
-            "reads per start point": 1.0, # downsampled
-            "readsMissingMDtags": 8002, # downsampled
+            "reads per start point": 1.002, # downsampled
+            "readsMissingMDtags": 7874, # downsampled
             "sample rate": 10,
             "total reads": 80020,
             "total target size": 527189,
@@ -77,7 +78,7 @@ class test(unittest.TestCase):
         # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
         # - FFQ/LFQ in samtools stats
         qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path_low_cover, self.quality)
+                    self.markdup_path_low_cover, self.quality, tmpdir=self.tmpdir, verbose=False)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
         # test input file also has variant '## METRICS CLASS ...' line
         metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)
