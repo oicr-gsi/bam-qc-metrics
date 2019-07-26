@@ -2,7 +2,7 @@
 
 """Main script to compute BAM QC metrics"""
 
-import argparse, os, sys
+import argparse, cProfile, os, sys
 from bam_qc_metrics import bam_qc
 
 DEFAULT_INSERT_MAX = 1500
@@ -58,8 +58,11 @@ def validate_args(args):
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
         if path_arg != None:
             valid = valid and validate_input_file(path_arg)
-    if args.out != '-':
+    if args.profile != None and args.profile != '-':
         # ugly but robust Python idiom to resolve path of parent directory
+        parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
+        valid = valid and validate_output_dir(parent_path)
+    if args.out != '-':
         parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
         valid = valid and validate_output_dir(parent_path)
     if args.temp_dir != None:
@@ -79,6 +82,8 @@ def main():
                         help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
                         help='Path for JSON output, or - for STDOUT. Required.')
+    parser.add_argument('-p', '--profile', metavar='PATH',
+                        help='Write profile stats to PATH, or - for STDOUT. WARNING: This will significantly increase runtime.')
     parser.add_argument('-q', '--trim-quality', metavar='QSCORE',
                         help='Samtools threshold for trimming alignment quality. Optional.')
     parser.add_argument('-s', '--sample-rate', metavar='INT',
@@ -92,8 +97,21 @@ def main():
     trim_quality = None if args.trim_quality == None else int(args.trim_quality)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
-    qc = bam_qc(args.bam, args.target, insert_max, args.metadata, args.mark_duplicates, trim_quality, sample_rate, args.temp_dir)
-    qc.write_output(args.out)
+    if args.profile != None:
+        method_args = (args.bam, args.target, insert_max, args.metadata, args.mark_duplicates, trim_quality, sample_rate, args.temp_dir)
+        if args.profile == '-':
+            params = [args.bam, args.target, insert_max, args.metadata, args.mark_duplicates, trim_quality, sample_rate, args.temp_dir]
+            method_args = tuple([str(p) for p in params])
+            cmd = "bam_qc('%s', '%s', %s, %s, %s, %s, %s, %s)" % method_args
+            cProfile.run(cmd)
+        else:
+            sys.stderr.write(args.profile+"\n")
+            profile_path = str(args.profile)
+            qc = cProfile.run(bam_qc(*method_args), profile_path)
+            qc.write_output(args.out)
+    else:
+        qc = bam_qc(args.bam, args.target, insert_max, args.metadata, args.mark_duplicates, trim_quality, sample_rate, args.temp_dir)
+        qc.write_output(args.out)
 
 if __name__ == "__main__":
     main()
