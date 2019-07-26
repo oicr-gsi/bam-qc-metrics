@@ -71,7 +71,8 @@ class bam_qc:
             self.qual_fail_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
             # unmapped reads will fail the mapping quality filter, by definition
             # so if the quality filter is applied, find unmapped total from the excluded reads
-            self.unmapped_excluded_reads = self.find_unmapped_reads(excluded_by_mapq_path)
+            unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
+            self.unmapped_excluded_reads = int(unmapped_raw.strip())
             ds_input_path = included_by_mapq_path
         else:
             self.qual_fail_reads = 0
@@ -353,19 +354,6 @@ class bam_qc:
         metrics['read 2 quality histogram'] = lfq_histogram
         metrics['pairsMappedAbnormallyFar'] = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         return metrics
-
-    def find_unmapped_reads(self, bam_path):
-        result = pysam.stats(bam_path)
-        reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", result)),
-            delimiter="\t"
-        )
-        unmapped = 0
-        for row in reader:
-            if row[0]=='SN' and row[1]=='reads unmapped:':
-                unmapped = int(row[2])
-                break
-        return unmapped
 
     def fq_stats(self, rows):
         """
