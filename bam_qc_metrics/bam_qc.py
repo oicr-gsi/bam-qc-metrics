@@ -20,6 +20,7 @@ class bam_qc:
     READ_1_INDEX = 0
     READ_2_INDEX = 1
     READ_UNKNOWN_INDEX = 2
+    START_POINTS_KEY = 'start points'
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
                  mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, tmpdir=None):
@@ -95,7 +96,6 @@ class bam_qc:
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
-        self.reads_per_start_point = self.evaluate_reads_per_start_point()
         self.samtools_metrics = self.evaluate_samtools_metrics(samtools_stats)
         # max_read_length needed if no reads are classified as read1 or read2
         max_read_length = self.evaluate_max_read_length(samtools_stats)
@@ -104,6 +104,8 @@ class bam_qc:
         read1_length = max(read1_hist.keys()) if len(read1_hist) > 0 else 0
         read2_length = max(read2_hist.keys()) if len(read2_hist) > 0 else 0
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length, max_read_length)
+        self.reads_per_start_point = self.evaluate_reads_per_start_point(self.custom_metrics[self.START_POINTS_KEY])
+        del self.custom_metrics[self.START_POINTS_KEY] # not needed for JSON output
 
     def cleanup(self):
         """
@@ -161,6 +163,7 @@ class bam_qc:
             'hard clip bases': 0,
             'soft clip bases': 0,
             'readsMissingMDtags': 0,
+            self.START_POINTS_KEY: 0,
         }
         read_names = ['1', '2', '?']
         read_lengths = [read1_length, read2_length, max_read_length]
@@ -178,14 +181,22 @@ class bam_qc:
         ur_quality_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
         ur_total_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
         ur_quality_histogram = {}
+        # set of unique start points
+        # start point is determined by fields 3 and 4 of the BAM record:
+        # reference sequence name and mapping position, respectively
+        # finding unique start points on the command line:
+        # samtools view $BAM_FILE | cut -f3,4 | sort | uniq | wc -l
+        start_point_set = set()
         # iterate over the BAM file
         consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
         for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
             if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
+            if not read.is_unmapped:
+                start_point_set.add((read.reference_name, read.reference_start))
             if read.query_length == 0: # all bases are hard clipped
-                 metrics['hard clip bases'] += read.infer_read_length()
-                 continue
+                metrics['hard clip bases'] += read.infer_read_length()
+                continue
             cycle = 1
             read_index = None
             if read.is_read1: read_index = self.READ_1_INDEX
@@ -220,6 +231,7 @@ class bam_qc:
                         ur_quality_histogram[q] += 1
                     else:
                         ur_quality_histogram[q] = 1
+        metrics[self.START_POINTS_KEY] = len(start_point_set)
         metrics['read ? average length'] = round(float(ur_length_total) / ur_count, self.PRECISION) if ur_count > 0 else None
         metrics['read ? length histogram'] = ur_length_histogram
         for cycle in ur_quality_by_cycle.keys():
@@ -246,25 +258,13 @@ class bam_qc:
                 break
         return max_read_length
 
-    def evaluate_reads_per_start_point(self):
+    def evaluate_reads_per_start_point(self, start_points):
         """
         Find reads per start point, defined as (unique reads)/(unique start points)
-        Requires two additional passes through the BAM file
         """
         reads_per_sp = None
-        # count the reads, excluding secondary alignments and unmapped reads
-        unique_reads = int(pysam.view('-c', '-F', '260', self.qc_input_bam_path).strip())
-        # start point is determined by fields 3 and 4 of the BAM record:
-        # reference sequence name and mapping position, respectively
-        # finding unique start points on the command line:
-        # samtools view $BAM_FILE | cut -f3,4 | sort | uniq | wc -l
-        start_point_set = set()
-        for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
-            if read.is_unmapped:
-                continue
-            else:
-                start_point_set.add((read.reference_name, read.reference_start))
-        start_points = len(start_point_set)
+        # count the reads, excluding secondary alignments (but including unmapped reads)
+        unique_reads = int(pysam.view('-c', '-F', '256', self.qc_input_bam_path).strip())
         if start_points > 0:
             reads_per_sp = round(float(unique_reads)/start_points, self.FINE_PRECISION)
         else:
