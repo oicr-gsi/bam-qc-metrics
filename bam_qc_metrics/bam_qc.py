@@ -134,9 +134,18 @@ class bam_qc:
         metrics['number of targets'] = targetBedTool.count()
         metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
         size = 0
+        # BED files may begin with header rows, of no definite format
+        # Body rows contain at least 3 fields; 2nd and 3rd fields are integers
+        body = False
+        integerExpr = re.compile("^[0-9]+$")
         with open(self.target_path, newline='') as bedfile:
             reader = csv.reader(bedfile, delimiter="\t")
             for row in reader:
+                if not body:
+                    if len(row) >= 3 and integerExpr.match(row[1]) and integerExpr.match(row[2]):
+                        body = True
+                    else:
+                        continue
                 size += int(row[2]) - int(row[1])
         metrics['total target size'] = size
         # TODO add bedtools coverage metrics?
