@@ -65,6 +65,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | read ? soft clip by cycle       |                         | CIGAR                   |
 | reads mapped and paired         | mate unmapped reads     | samtools stats: SN      |
 | reads on target                 |                         | bedtools                |
+| reads per start point           |                         | samtools                |
 | readsMissingMDtags              |                         | CIGAR                   |
 | run name                        |                         | metadata                |
 | sample                          |                         | metadata                |

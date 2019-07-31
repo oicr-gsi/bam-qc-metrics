@@ -8,6 +8,9 @@ Fixed:
 - GP-2036 Failure to skip BED file headers
 - GP-2037 Count mismatches using MD tag, not CIGAR string
 
+Added:
+- GP-2038 Report software versions in JSON
+
 v0.1.4: 2019-07-26
 ------------------
 
