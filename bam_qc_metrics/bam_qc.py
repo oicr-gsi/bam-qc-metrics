@@ -24,7 +24,8 @@ class bam_qc:
     START_POINTS_KEY = 'start points'
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
-                 mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, tmpdir=None, verbose=True):
+                 mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, reference=None,
+                 tmpdir=None, verbose=True):
         # define instance variables
         self.bedtools_metrics = None
         self.custom_metrics = None
@@ -45,6 +46,7 @@ class bam_qc:
         self.qc_input_bam_path = None
         self.qual_fail_reads = None
         self.reads_per_start_point = None
+        self.reference = reference
         self.sample_rate = 1
         self.samtools_metrics = None
         self.target_path = target_path
@@ -80,6 +82,11 @@ class bam_qc:
             ds_input_path = bam_path
         # run samtools stats -- after filtering, before downsampling
         samtools_stats = pysam.stats(ds_input_path)
+        if self.reference != None:
+            # TODO run stats separately for read1 and read2 using the -f option with flags 64 & 128
+            # get mismatches per cycle
+            # (ugly, but less error prone than using MD tags or similar)
+            pass
         # apply downsampling (if any)
         # self.qc_input_bam_path is input to all subsequent QC steps
         if sample_rate != None and sample_rate > 1:
@@ -479,6 +486,7 @@ class bam_qc:
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
+        output['alignment reference'] = self.reference
         output['insert max'] = self.expected_insert_max
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq

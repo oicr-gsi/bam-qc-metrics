@@ -55,7 +55,7 @@ def validate_args(args):
         valid = valid and validate_positive_integer(args.insert_max, 'Max insert size')
     if args.sample_rate != None:
         valid = valid and validate_positive_integer(args.sample_rate, 'Downsampling rate')
-    for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates):
+    for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates, args.reference):
         if path_arg != None:
             valid = valid and validate_input_file(path_arg)
     if args.out != '-':
@@ -81,6 +81,10 @@ def main():
                         help='Path for JSON output, or - for STDOUT. Required.')
     parser.add_argument('-q', '--skip_below_mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
+    parser.add_Argument('-r', '--reference', metavar='PATH',
+                        help='Path to FASTA reference used to align the BAM file. Used to find '+\
+                        'mismatches by cycle using samtools. Optional; if not supplied, '\+
+                        'mismatches by cycle will be empty.')
     parser.add_argument('-s', '--sample-rate', metavar='INT',
                         help='Sample every Nth read, where N is the argument. Optional, defaults to 1 (no sampling).')
     parser.add_argument('-t', '--target', metavar='PATH',
@@ -92,7 +96,15 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
-    qc = bam_qc(args.bam, args.target, insert_max, args.metadata, args.mark_duplicates, skip_below_mapq, sample_rate, args.temp_dir)
+    qc = bam_qc(args.bam,
+                args.target,
+                insert_max,
+                args.metadata,
+                args.mark_duplicates,
+                skip_below_mapq,
+                args.reference,
+                sample_rate,
+                args.temp_dir)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
