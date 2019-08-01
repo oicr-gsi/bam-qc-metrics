@@ -185,35 +185,20 @@ class bam_qc:
         # samtools view $BAM_FILE | cut -f3,4 | sort | uniq | wc -l
         start_point_set = set()
         # iterate over the BAM file
-        all_mismatches = 0 # FIXME check for testing
         consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
         for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
-            if read.is_read1: read_index = self.READ_1_INDEX
-            elif read.is_read2: read_index = self.READ_2_INDEX
-            else: read_index = self.READ_UNKNOWN_INDEX
-            if read.has_tag('MD'):
-                key = 'read %s mismatch by cycle' % read_names[read_index]
-                aligned = read.get_aligned_pairs(with_seq=True)
-                if read.is_reverse:
-                    aligned.reverse()
-                md_cycle = 1
-                for [read_pos, ref_pos, ref_seq] in aligned:
-                    # get_aligned_pairs uses MD tag to find sequence; mismatches reported in lower case
-                    # None denotes insertion/deletion/skip
-                    if read_pos != None:
-                        if ref_pos != None and re.match('[acgt]', ref_seq):
-                            metrics[key][md_cycle] += 1
-                            all_mismatches += 1
-                        md_cycle +=1
-            else:
+            if not read.has_tag('MD'):
                 metrics['readsMissingMDtags'] += 1
             if not read.is_unmapped:
                 start_point_set.add((read.reference_name, read.reference_start))
             if read.query_length == 0: # all bases are hard clipped
                 metrics['hard clip bases'] += read.infer_read_length()
                 continue
-            # process CIGAR strings
             cycle = 1
+            read_index = None
+            if read.is_read1: read_index = self.READ_1_INDEX
+            elif read.is_read2: read_index = self.READ_2_INDEX
+            else: read_index = self.READ_UNKNOWN_INDEX
             if read.cigartuples != None:
                 if read.is_reverse: cigar_list = reversed(read.cigartuples)
                 else: cigar_list = read.cigartuples
@@ -243,7 +228,6 @@ class bam_qc:
                         ur_quality_histogram[q] += 1
                     else:
                         ur_quality_histogram[q] = 1
-        print("Mismatches (MD tag):", all_mismatches, file=sys.stderr)
         metrics[self.START_POINTS_KEY] = len(start_point_set)
         metrics['read ? average length'] = round(float(ur_length_total) / ur_count, self.PRECISION) if ur_count > 0 else None
         metrics['read ? length histogram'] = ur_length_histogram
@@ -352,8 +336,6 @@ class bam_qc:
                 else:
                     val = int(row[2])
                 metrics[key_map[samtools_key]] = val
-                if samtools_key == 'mismatches':
-                    print("Mismatches (samtools stats):", val, file=sys.stderr) # FIXME
         metrics['average read length'] = self.mean_read_length(stored['RL'])
         metrics['paired end'] = metrics['paired reads'] > 0
         metrics['read 1 average length'] = self.mean_read_length(stored['FRL'])
