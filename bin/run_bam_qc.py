@@ -77,13 +77,16 @@ def main():
                         'counted as abnormal. Optional; default = %i.' % DEFAULT_INSERT_MAX)
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='Path to JSON file containing metadata. Optional.')
+    parser.add_argument('-n', '--n-as-mismatch', action='store_true',
+                        help='Record N calls as mismatches in mismatch-per-cycle counts. '+\
+                        'Only relevant if a reference is given with -r.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
                         help='Path for JSON output, or - for STDOUT. Required.')
     parser.add_argument('-q', '--skip_below_mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
-    parser.add_Argument('-r', '--reference', metavar='PATH',
+    parser.add_argument('-r', '--reference', metavar='PATH',
                         help='Path to FASTA reference used to align the BAM file. Used to find '+\
-                        'mismatches by cycle using samtools. Optional; if not supplied, '\+
+                        'mismatches by cycle using samtools. Optional; if not supplied, '+\
                         'mismatches by cycle will be empty.')
     parser.add_argument('-s', '--sample-rate', metavar='INT',
                         help='Sample every Nth read, where N is the argument. Optional, defaults to 1 (no sampling).')
@@ -91,6 +94,7 @@ def main():
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
     parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to /tmp')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Print additional messages to STDERR')
     args = parser.parse_args()
     if not validate_args(args): exit(1)
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
@@ -101,10 +105,12 @@ def main():
                 insert_max,
                 args.metadata,
                 args.mark_duplicates,
+                args.n_as_mismatch,
                 skip_below_mapq,
                 args.reference,
                 sample_rate,
-                args.temp_dir)
+                args.temp_dir,
+                args.verbose)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
