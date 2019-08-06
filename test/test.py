@@ -2,7 +2,7 @@
 
 import json, os, tempfile, unittest
 
-from bam_qc_metrics import bam_qc
+from bam_qc_metrics import bam_qc, fast_metric_finder
 
 class test(unittest.TestCase):
 
@@ -51,8 +51,9 @@ class test(unittest.TestCase):
         
     def test_downsampled_analysis(self):
         sample_rate = 10
-        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path, self.markdup_path,
-                    self.n_as_mismatch, self.quality, self.reference, sample_rate, tmpdir=self.tmpdir, verbose=False)
+        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
+                    self.markdup_path, self.n_as_mismatch, self.quality, self.reference,
+                    sample_rate, tmpdir=self.tmpdir, verbose=False)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -78,8 +79,9 @@ class test(unittest.TestCase):
         # test possible missing inputs:
         # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
         # - FFQ/LFQ in samtools stats
-        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path, self.markdup_path,
-                    self.n_as_mismatch, self.quality, self.reference, sample_rate=None, tmpdir=self.tmpdir, verbose=False)
+        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
+                    self.markdup_path, self.n_as_mismatch, self.quality, self.reference,
+                    sample_rate=None, tmpdir=self.tmpdir, verbose=False)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
         # test input file also has variant '## METRICS CLASS ...' line
         metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)
@@ -95,7 +97,9 @@ class test(unittest.TestCase):
         del metrics_expected['HISTOGRAM']
         self.assertEqual(metrics_found, metrics_expected)
         # test empty FFQ/LFQ result from samtools stats; may occur for small input datasets
-        fq_result = qc.fq_stats([])
+        # requires a fast_metric_finder object
+        fast_finder = fast_metric_finder(self.bam_path, self.reference, self.insert_max)
+        fq_result = fast_finder.fq_stats([])
         fq_expected = ({},{})
         self.assertEqual(fq_expected, fq_result)
         qc.cleanup()

@@ -42,6 +42,7 @@ class bam_qc:
         self.bedtools_metrics = None
         self.custom_metrics = None
         self.expected_insert_max = expected_insert_max
+        self.fast_metrics = None
         self.mark_duplicates_metrics = self.DEFAULT_MARK_DUPLICATES_METRICS
         self.metadata = None
         self.mismatches_by_read = None
@@ -49,8 +50,7 @@ class bam_qc:
         self.qual_fail_reads = None
         self.reads_per_start_point = None
         self.reference = reference
-        self.sample_rate = 1
-        self.samtools_metrics = None
+        self.sample_rate = None
         self.skip_below_mapq = skip_below_mapq
         self.target_path = target_path
         self.tmp_object = None
@@ -58,33 +58,31 @@ class bam_qc:
         self.unmapped_excluded_reads = None
         self.verbose = verbose # if False, suppress non-critical messages to stderr
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(tmpdir)
+        # read metadata and MarkDuplicates metrics
+        self.metadata = self.read_metadata(metadata_path)
+        if mark_duplicates_path != None:
+            self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         # apply quality filter (if any); get input path for downsampling
         result = self.apply_mapq_filter(bam_path)
         (ds_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
-        # run samtools stats & find mismatches by read -- after filtering, before downsampling
-        samtools_stats = pysam.stats(ds_input_path)
-        self.mismatches_by_read = self.evaluate_mismatches(ds_input_path)
+        # find 'fast' metrics on full dataset -- after filtering, before downsampling
+        fast_finder = fast_metric_finder(ds_input_path,
+                                         self.reference,
+                                         self.expected_insert_max)
+        # TODO sanity check that unmapped reads from fast_finder is 0 if filtering in effect
+        self.fast_metrics = fast_finder.metrics        
         # apply downsampling (if any); self.qc_input_bam_path is input to all subsequent QC steps
         if sample_rate != None and sample_rate > 1:
             self.sample_rate = sample_rate
             self.qc_input_bam_path = self.generate_downsampled_bam(ds_input_path, self.sample_rate)
         else:
+            self.sample_rate = 1
             self.qc_input_bam_path = ds_input_path
-        # read required keys from metadata (if any)
-        self.metadata = self.read_metadata(metadata_path)
-        # find metrics
-        if mark_duplicates_path != None:
-            self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
+        # find remaining metrics
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
-        self.samtools_metrics = self.evaluate_samtools_metrics(samtools_stats)
-        # TODO make a class to process custom metrics -- existing method is too complicated
-        # max_read_length needed if no reads are classified as read1 or read2
-        max_read_length = self.evaluate_max_read_length(samtools_stats)
-        read1_hist = self.samtools_metrics['read 1 length histogram']
-        read2_hist = self.samtools_metrics['read 2 length histogram']
-        read1_length = max(read1_hist.keys()) if len(read1_hist) > 0 else 0
-        read2_length = max(read2_hist.keys()) if len(read2_hist) > 0 else 0
-        self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length, max_read_length)
+        self.custom_metrics = self.evaluate_custom_metrics(fast_finder.read_1_length,
+                                                           fast_finder.read_2_length,
+                                                           fast_finder.max_read_length)
         self.reads_per_start_point = self.evaluate_reads_per_start_point(self.custom_metrics[self.START_POINTS_KEY])
         del self.custom_metrics[self.START_POINTS_KEY] # not needed for JSON output
 
@@ -125,13 +123,6 @@ class bam_qc:
             self.tmp_object.cleanup()
         elif self.verbose:
             sys.stderr.write("Omitting cleanup for user-specified temporary directory %s\n" % self.tmpdir)
-
-    def count_mapped_abnormally_far(self, insert_size_histogram):
-        count = 0
-        for key in insert_size_histogram.keys():
-            if key >= self.expected_insert_max:
-                count += insert_size_histogram[key]
-        return count
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
@@ -244,47 +235,6 @@ class bam_qc:
         metrics['read ? quality histogram'] = ur_quality_histogram
         return metrics
 
-    def evaluate_max_read_length(self, samtools_stats):
-        """
-        Find max read length from samtools stats output.
-        Not part of JSON output, but needed to evaluate custom metrics.
-        """
-        reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
-            delimiter="\t"
-        )
-        max_read_length = 0
-        for row in reader:
-            if row[0] == 'SN' and row[1] == 'maximum length:':
-                max_read_length = int(row[2])
-                break
-        return max_read_length
-
-    def evaluate_mismatches(self, input_bam):
-        """
-        Find mismatches by read using samtools stats with:
-        -r to specify a reference and get mismatch counts
-        -f/F to specify read1/read2/unknown
-        Use 'samtools view' to find unknown reads
-        Inefficient, but simpler than custom processing of MD tags
-
-        Reference may be None -- if so, return 3 empty dictionaries
-        """
-        mismatches = {}
-        # find read using flags; unknown read is neither R1 nor R2
-        if self.reference != None:
-            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '64', input_bam))
-            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '128', input_bam))
-            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-F', '192', input_bam))
-        else:
-            r1_mismatch = {}
-            r2_mismatch = {}
-            ur_mismatch = {}
-        mismatches['read 1 mismatch by cycle'] = r1_mismatch
-        mismatches['read 2 mismatch by cycle'] = r2_mismatch
-        mismatches['read ? mismatch by cycle'] = ur_mismatch
-        return mismatches
-
     def evaluate_reads_per_start_point(self, start_points):
         """
         Find reads per start point, defined as (unique reads)/(unique start points)
@@ -297,112 +247,6 @@ class bam_qc:
         else:
             reads_per_sp = 0.0
         return reads_per_sp
-
-    def evaluate_samtools_metrics(self, samtools_stats):
-        """Process metrics derived from samtools output"""
-        # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
-        float_keys = set([
-            'error rate',
-            'average quality',
-            'insert size average',
-            'insert size standard deviation',
-            'percentage of properly paired reads (%)'
-        ])
-        # map from SN field names to output keys
-        key_map = {
-            'bases mapped (cigar)': 'bases mapped',
-            'average length': 'average read length',
-            'insert size average': 'insert size average',
-            'insert size standard deviation': 'insert size standard deviation',
-            'reads mapped': 'mapped reads',
-            'reads mapped and paired': 'reads mapped and paired',
-            'mismatches': 'mismatched bases',
-            # 'reads paired' > 0 implies 'paired end' == True
-            'reads paired': 'paired reads',
-            'pairs on different chromosomes': 'pairsMappedToDifferentChr',
-            'reads properly paired': 'properly paired reads',
-            'raw total sequences': 'total reads',
-            'reads unmapped': 'unmapped reads',
-            'non-primary alignments': 'non primary reads',
-        }
-        metrics = {}
-        metrics['inserted bases'] = 0
-        metrics['deleted bases'] = 0
-        metrics['insert size histogram'] = {}
-        labels_to_store = set(['FFQ', 'FRL', 'LFQ', 'LRL', 'RL'])
-        stored = {} # store selected rows for later processing
-        for label in labels_to_store: stored[label] = []
-        reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
-            delimiter="\t"
-        )
-        for row in reader:
-            if row[0] in labels_to_store:
-                stored[row[0]].append(row)
-            elif row[0] == 'ID':
-                metrics['inserted bases'] += int(row[1]) * int(row[2])
-                metrics['deleted bases'] += int(row[1]) * int(row[3])
-            elif row[0] == 'IS':
-                metrics['insert size histogram'][int(row[1])] = int(row[2])
-            elif row[0] == 'SN':
-                samtools_key = re.sub(':$', '', row[1])
-                if samtools_key not in key_map:
-                    continue
-                elif samtools_key == 'reads unmapped':
-                    if self.unmapped_excluded_reads != None:
-                        # filtering in effect; unmapped reads excluded by alignment quality filter
-                        val = self.unmapped_excluded_reads
-                        if int(row[2]) != 0:
-                            # This *should* never happen, but just in case it does
-                            msg = "WARNING: %s reads were unmapped AND had alignment scores "+\
-                                  "> %d; not counted in 'unmapped reads' total. Inconsistent "+\
-                                  "data in BAM input?\n" % (row[2], self.skip_below_mapq)
-                            sys.stderr.write(msg)
-                    else:
-                        # no quality filtering; use unmapped reads count from main input
-                        val = int(row[2])
-                elif samtools_key in float_keys:
-                    val = float(row[2])
-                else:
-                    val = int(row[2])
-                metrics[key_map[samtools_key]] = val
-        metrics['average read length'] = self.mean_read_length(stored['RL'])
-        metrics['paired end'] = metrics['paired reads'] > 0
-        metrics['read 1 average length'] = self.mean_read_length(stored['FRL'])
-        metrics['read 2 average length'] = self.mean_read_length(stored['LRL'])
-        metrics['read 1 length histogram'] = self.read_length_histogram(stored['FRL'])
-        metrics['read 2 length histogram'] = self.read_length_histogram(stored['LRL'])
-        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(stored['FFQ'])
-        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(stored['LFQ'])
-        metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
-        metrics['read 1 quality histogram'] = ffq_histogram
-        metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
-        metrics['read 2 quality histogram'] = lfq_histogram
-        metrics['pairsMappedAbnormallyFar'] = self.count_mapped_abnormally_far(metrics['insert size histogram'])
-        return metrics
-
-    def fq_stats(self, rows):
-        """
-        Compute quality metrics from either FFQ or LFQ entries in samtools stats:
-            - Mean quality by cycle
-            - Quality histogram
-        """
-        meanByCyc = {}
-        histogram = {}
-        if len(rows) > 0:
-            max_width = max([len(row) for row in rows])
-            histogram = {q: 0 for q in range(max_width-2)}
-            for row in rows:
-                cycle = int(row[1])
-                counts = [int(n) for n in row[2:]]
-                total = 0
-                count = 0
-                for qscore in range(len(counts)):
-                    total += counts[qscore]*qscore
-                    count += counts[qscore]
-                    histogram[qscore] += counts[qscore]
-                meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
-        return (meanByCyc, histogram)
 
     def generate_downsampled_bam(self, bam_path, sample_rate):
         """
@@ -438,43 +282,6 @@ class bam_qc:
             if self.verbose: sys.stderr.write("Metadata file not given, using empty defaults\n")
             metadata = {key: None for key in self.METADATA_KEYS}
         return metadata
-
-    def parse_mismatch(self, samtools_stats):
-        """
-        Input is the string returned by pysam.stats
-        Parse the mismatches by cycle; return an empty dictionary if no data found
-        """
-        reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
-            delimiter="\t"
-        )
-        mismatch_by_cycle = {}
-        # parse rows with the 'MPC' identifier for mismatch-per-cycle
-        # column 1 is cycle; 2 is number of N's; 3 and subsequent are mismatches by quality
-        empty = False
-        for row in reader:
-            if row[0] == 'MPC':
-                cycle = int(row[1])
-                mismatches = 0
-                if self.n_as_mismatch: start = 2
-                else: start = 3
-                for m in row[start:]:
-                    mismatches += int(m)
-                mismatch_by_cycle[cycle] = mismatches
-            elif row[0] == 'SN' and row[1] == 'sequences:' and int(row[2]) == 0:
-                empty = True
-        if empty:
-            # special case -- no reads found (eg. no unknown reads)
-            # MPC returns 0 mismatches for cycle 1, but we want an empty dictionary
-            mismatch_by_cycle = {}
-        return mismatch_by_cycle
-
-    def read_length_histogram(self, rows):
-        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for read length histogram"""
-        histogram = {}
-        for row in rows:
-            histogram[int(row[1])] = int(row[2])
-        return histogram
     
     def read_mark_duplicates_metrics(self, input_path):
         section = 0
@@ -527,18 +334,6 @@ class bam_qc:
         metrics['HISTOGRAM'] = hist
         return metrics
 
-    def mean_read_length(self, rows):
-        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length"""
-        total = 0
-        count = 0
-        for row in rows:
-            length = int(row[1])
-            length_count = int(row[2])
-            total += length * length_count
-            count += length_count
-        mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
-        return mean_rl
-
     def setup_tmpdir(self, tmpdir):
         if tmpdir==None:
             tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
@@ -554,12 +349,10 @@ class bam_qc:
             output[key] = self.metadata.get(key)
         for key in self.bedtools_metrics.keys():
             output[key] = self.bedtools_metrics.get(key)
-        for key in self.samtools_metrics.keys():
-            output[key] = self.samtools_metrics.get(key)
+        for key in self.fast_metrics.keys():
+            output[key] = self.fast_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
-        for key in self.mismatches_by_read.keys():
-            output[key] = self.mismatches_by_read.get(key)
         output['alignment reference'] = self.reference
         output['insert max'] = self.expected_insert_max
         output['mark duplicates'] = self.mark_duplicates_metrics
@@ -577,3 +370,254 @@ class bam_qc:
             out_file.close()
 
 
+class fast_metric_finder:
+
+    """
+    Find "fast" metric types which can be evaluated before downsampling
+    Mostly uses native samtools stats, rather than custom metrics
+
+    Note: The 'unmapped reads' metric should be 0 on alignment-quality-filtered data
+    """
+    
+    # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
+    FLOAT_KEYS =  set([
+        'error rate',
+        'average quality',
+        'insert size average',
+        'insert size standard deviation',
+        'percentage of properly paired reads (%)'
+    ])
+
+    # map from SN field names to output keys
+    SN_KEY_MAP = {
+        'bases mapped (cigar)': 'bases mapped',
+        'average length': 'average read length',
+        'insert size average': 'insert size average',
+        'insert size standard deviation': 'insert size standard deviation',
+        'reads mapped': 'mapped reads',
+        'reads mapped and paired': 'reads mapped and paired',
+        'mismatches': 'mismatched bases',
+        # 'reads paired' > 0 implies 'paired end' == True
+        'reads paired': 'paired reads',
+        'pairs on different chromosomes': 'pairsMappedToDifferentChr',
+        'reads properly paired': 'properly paired reads',
+        'raw total sequences': 'total reads',
+        'reads unmapped': 'unmapped reads',
+        'non-primary alignments': 'non primary reads',
+    }
+
+    PRECISION = 1 # TODO have a constants module for precision etc?
+    
+    def __init__(self, bam_path, reference, expected_insert_max):
+        self.bam_path = bam_path
+        self.reference = reference
+        self.expected_insert_max = expected_insert_max
+        self.samtools_stats = pysam.stats(self.bam_path)
+        self.metrics = self.evaluate_metrics()
+        # find secondary stats -- not for JSON export, but used to calculate subsequent metrics
+        self.max_read_length = self.evaluate_max_read_length()
+        read1_hist = self.metrics['read 1 length histogram']
+        read2_hist = self.metrics['read 2 length histogram']
+        self.read_1_length = max(read1_hist.keys()) if len(read1_hist) > 0 else 0
+        self.read_2_length = max(read2_hist.keys()) if len(read2_hist) > 0 else 0
+
+    def count_mapped_abnormally_far(self, insert_size_histogram):
+        count = 0
+        for key in insert_size_histogram.keys():
+            if key >= self.expected_insert_max:
+                count += insert_size_histogram[key]
+        return count
+        
+    def evaluate_metrics(self):
+        metrics = {}
+        metric_subsets = [
+            self.evaluate_mismatches(),
+            self.read_length_and_quality_metrics(),
+            self.misc_stats_metrics()
+        ]   
+        for metric_subset in metric_subsets:
+            for key in metric_subset.keys():
+                metrics[key] = metric_subset[key]
+        return metrics
+
+    def evaluate_max_read_length(self):
+        """
+        Find max read length from samtools stats output.
+        Not part of JSON output, but needed to evaluate custom metrics.
+        """
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", self.samtools_stats)),
+            delimiter="\t"
+        )
+        max_read_length = 0
+        for row in reader:
+            if row[0] == 'SN' and row[1] == 'maximum length:':
+                max_read_length = int(row[2])
+                break
+        return max_read_length
+    
+    def evaluate_mismatches(self):
+        """
+        Find mismatches by read using samtools stats with:
+        -r to specify a reference and get mismatch counts
+        -f/F to specify read1/read2/unknown
+        Use 'samtools view' to find unknown reads
+        Inefficient, but simpler than custom processing of MD tags
+
+        Reference may be None -- if so, return 3 empty dictionaries
+        """
+        mismatches = {}
+        # find read using flags; unknown read is neither R1 nor R2
+        if self.reference != None:
+            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '64', self.bam_path))
+            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '128', self.bam_path))
+            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-F', '192', self.bam_path))
+        else:
+            r1_mismatch = {}
+            r2_mismatch = {}
+            ur_mismatch = {}
+        mismatches['read 1 mismatch by cycle'] = r1_mismatch
+        mismatches['read 2 mismatch by cycle'] = r2_mismatch
+        mismatches['read ? mismatch by cycle'] = ur_mismatch
+        return mismatches
+
+    def fq_stats(self, rows):
+        """
+        Compute quality metrics from either FFQ or LFQ entries in samtools stats:
+            - Mean quality by cycle
+            - Quality histogram
+        """
+        meanByCyc = {}
+        histogram = {}
+        if len(rows) > 0:
+            max_width = max([len(row) for row in rows])
+            histogram = {q: 0 for q in range(max_width-2)}
+            for row in rows:
+                cycle = int(row[1])
+                counts = [int(n) for n in row[2:]]
+                total = 0
+                count = 0
+                for qscore in range(len(counts)):
+                    total += counts[qscore]*qscore
+                    count += counts[qscore]
+                    histogram[qscore] += counts[qscore]
+                meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
+        return (meanByCyc, histogram)
+
+    def mean_read_length(self, rows):
+        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length"""
+        total = 0
+        count = 0
+        for row in rows:
+            length = int(row[1])
+            length_count = int(row[2])
+            total += length * length_count
+            count += length_count
+        mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
+        return mean_rl
+        
+    def misc_stats_metrics(self):
+        """
+        Process the output from 'samtools stats' to derive miscellaneous metrics
+        """
+        metrics = {}
+        metrics['inserted bases'] = 0
+        metrics['deleted bases'] = 0
+        metrics['insert size histogram'] = {}
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", self.samtools_stats)),
+            delimiter="\t"
+        )
+        for row in reader:
+            if row[0] == 'ID':
+                metrics['inserted bases'] += int(row[1]) * int(row[2])
+                metrics['deleted bases'] += int(row[1]) * int(row[3])
+            elif row[0] == 'IS':
+                metrics['insert size histogram'][int(row[1])] = int(row[2])
+            elif row[0] == 'SN':
+                samtools_key = re.sub(':$', '', row[1])
+                if samtools_key not in self.SN_KEY_MAP:
+                    continue
+                elif samtools_key in self.FLOAT_KEYS:
+                    val = float(row[2])
+                else:
+                    val = int(row[2])
+                metrics[self.SN_KEY_MAP[samtools_key]] = val
+        metrics['paired end'] = metrics['paired reads'] > 0
+        abnormal_count = self.count_mapped_abnormally_far(metrics['insert size histogram'])
+        metrics['pairsMappedAbnormallyFar'] = abnormal_count
+        return metrics
+    
+    def parse_mismatch(self, samtools_stats):
+        """
+        Input is the string returned by pysam.stats
+        Parse the mismatches by cycle; return an empty dictionary if no data found
+        """
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
+            delimiter="\t"
+        )
+        mismatch_by_cycle = {}
+        # parse rows with the 'MPC' identifier for mismatch-per-cycle
+        # column 1 is cycle; 2 is number of N's; 3 and subsequent are mismatches by quality
+        empty = False
+        for row in reader:
+            if row[0] == 'MPC':
+                cycle = int(row[1])
+                mismatches = 0
+                if self.n_as_mismatch: start = 2
+                else: start = 3
+                for m in row[start:]:
+                    mismatches += int(m)
+                mismatch_by_cycle[cycle] = mismatches
+            elif row[0] == 'SN' and row[1] == 'sequences:' and int(row[2]) == 0:
+                empty = True
+        if empty:
+            # special case -- no reads found (eg. no unknown reads)
+            # MPC returns 0 mismatches for cycle 1, but we want an empty dictionary
+            mismatch_by_cycle = {}
+        return mismatch_by_cycle
+
+    def read_length_histogram(self, rows):
+        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for read length histogram"""
+        histogram = {}
+        for row in rows:
+            histogram[int(row[1])] = int(row[2])
+        return histogram
+
+    def read_length_and_quality_metrics(self):
+        """
+        Process the output from 'samtools stats' to derive read length and quality metrics
+        """
+        metrics = {}
+        stored = {label: [] for label in ['FFQ', 'FRL', 'LFQ', 'LRL', 'RL']}
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", self.samtools_stats)),
+            delimiter="\t"
+        )
+        for row in reader:
+            if row[0] in stored:
+                stored[row[0]].append(row)
+        metrics['average read length'] = self.mean_read_length(stored['RL'])
+        metrics['read 1 average length'] = self.mean_read_length(stored['FRL'])
+        metrics['read 2 average length'] = self.mean_read_length(stored['LRL'])
+        metrics['read 1 length histogram'] = self.read_length_histogram(stored['FRL'])
+        metrics['read 2 length histogram'] = self.read_length_histogram(stored['LRL'])
+        (ffq_mean_by_cycle, ffq_histogram) = self.fq_stats(stored['FFQ'])
+        (lfq_mean_by_cycle, lfq_histogram) = self.fq_stats(stored['LFQ'])
+        metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
+        metrics['read 1 quality histogram'] = ffq_histogram
+        metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
+        metrics['read 2 quality histogram'] = lfq_histogram        
+        return metrics
+
+    
+class post_downsample_metric_finder:
+
+    """
+    Find metric types evaluated after downsampling
+    Includes custom iteration over BAM reads, eg. to process CIGAR strings
+    """
+
+    def __init__(self):
+        pass
