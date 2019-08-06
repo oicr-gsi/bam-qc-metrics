@@ -39,7 +39,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | read 1 hard clip by cycle       |                         | CIGAR                   |
 | read 1 insertion by cycle       |                         | CIGAR                   |
 | read 1 length histogram         |                         | samtools stats: FRL     |
-| read 1 mismatch by cycle        |                         | CIGAR                   |
+| read 1 mismatch by cycle        |                         | samtools stats: MPC       |
 | read 1 quality by cycle         |                         | samtools stats: FFQ     |
 | read 1 quality histogram        |                         | samtools stats: FFQ     |
 | read 1 soft clip by cycle       |                         | CIGAR                   |
@@ -49,7 +49,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | read 2 hard clip by cycle       |                         | CIGAR                   |
 | read 2 insertion by cycle       |                         | CIGAR                   |
 | read 2 length histogram         |                         | samtools stats: LRL     |
-| read 2 mismatch by cycle        |                         | CIGAR                   |
+| read 2 mismatch by cycle        |                         | samtools stats: MPC     |
 | read 2 quality by cycle         |                         | samtools stats: LFQ     |
 | read 2 quality histogram        |                         | samtools stats: LFQ     |
 | read 2 soft clip by cycle       |                         | CIGAR                   |
@@ -59,7 +59,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | read ? hard clip by cycle       |                         | CIGAR                   |
 | read ? insertion by cycle       |                         | CIGAR                   |
 | read ? length histogram         |                         | CIGAR                   |
-| read ? mismatch by cycle        |                         | CIGAR                   |
+| read ? mismatch by cycle        |                         | samtools stats: MPC     |
 | read ? quality by cycle         |                         | CIGAR                   |
 | read ? quality histogram        |                         | CIGAR                   |
 | read ? soft clip by cycle       |                         | CIGAR                   |
@@ -108,4 +108,4 @@ If quality filtering is in effect, the `unmapped reads` metric is computed only 
 
 The `mismatched bases` field may not be consistent with the mismatch-by-cycle fields for each read.
 
-The former is derived from `samtools stats`; the latter from CIGAR strings. The CIGAR operation M for 'alignment match' may represent a sequence match or mismatch. So, the CIGAR string does not necessarily record all mismatches. In the event of inconsistency, `mismatched bases` should be taken as correct.
+The former is derived from `samtools stats SN`; the latter from `samtools stats MPC` with a given alignment reference.

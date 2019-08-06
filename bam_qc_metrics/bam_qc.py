@@ -24,7 +24,8 @@ class bam_qc:
     START_POINTS_KEY = 'start points'
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
-                 mark_duplicates_path=None, skip_below_mapq=None, sample_rate=None, tmpdir=None, verbose=True):
+                 mark_duplicates_path=None, n_as_mismatch=False, skip_below_mapq=None,
+                 reference=None, sample_rate=None, tmpdir=None, verbose=True):
         # define instance variables
         self.bedtools_metrics = None
         self.custom_metrics = None
@@ -42,9 +43,11 @@ class bam_qc:
             "UNPAIRED_READ_DUPLICATES": None
         }
         self.metadata = None
+        self.mismatches_by_read = None
         self.qc_input_bam_path = None
         self.qual_fail_reads = None
         self.reads_per_start_point = None
+        self.reference = reference
         self.sample_rate = 1
         self.samtools_metrics = None
         self.target_path = target_path
@@ -78,8 +81,9 @@ class bam_qc:
         else:
             self.qual_fail_reads = 0
             ds_input_path = bam_path
-        # run samtools stats -- after filtering, before downsampling
+        # run samtools stats & find mismatches by read -- after filtering, before downsampling
         samtools_stats = pysam.stats(ds_input_path)
+        self.mismatches_by_read = self.evaluate_mismatches_by_read(ds_input_path, self.reference, n_as_mismatch)
         # apply downsampling (if any)
         # self.qc_input_bam_path is input to all subsequent QC steps
         if sample_rate != None and sample_rate > 1:
@@ -153,7 +157,6 @@ class bam_qc:
             2: 'deletion',
             4: 'soft clip',
             5: 'hard clip',
-            8: 'mismatch'
         }
         # initialize the metrics data structure
         metrics = {
@@ -254,6 +257,31 @@ class bam_qc:
                 max_read_length = int(row[2])
                 break
         return max_read_length
+
+    def evaluate_mismatches_by_read(self, input_bam, reference, n_as_mismatch):
+        """
+        Find mismatches by read using samtools stats with:
+        -r to specify a reference and get mismatch counts
+        -f/F to specify read1/read2/unknown
+        Use 'samtools view' to find unknown reads
+        Inefficient, but simpler than custom processing of MD tags
+
+        Reference may be None -- if so, return 3 empty dictionaries
+        """
+        mismatches = {}
+        # find read using flags; unknown read is neither R1 nor R2
+        if reference != None:
+            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '64', input_bam), n_as_mismatch)
+            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '128', input_bam), n_as_mismatch)
+            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-F', '192', input_bam), n_as_mismatch)
+        else:
+            r1_mismatch = {}
+            r2_mismatch = {}
+            ur_mismatch = {}
+        mismatches['read 1 mismatch by cycle'] = r1_mismatch
+        mismatches['read 2 mismatch by cycle'] = r2_mismatch
+        mismatches['read ? mismatch by cycle'] = ur_mismatch
+        return mismatches
 
     def evaluate_reads_per_start_point(self, start_points):
         """
@@ -411,6 +439,36 @@ class bam_qc:
         mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
         return mean_rl
 
+    def parse_mismatch(self, samtools_stats, n_as_mismatch):
+        """
+        Input is the string returned by pysam.stats
+        Parse the mismatches by cycle; return an empty dictionary if no data found
+        """
+        reader = csv.reader(
+            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
+            delimiter="\t"
+        )
+        mismatch_by_cycle = {}
+        # parse rows with the 'MPC' identifier for mismatch-per-cycle
+        # column 1 is cycle; 2 is number of N's; 3 and subsequent are mismatches by quality
+        empty = False
+        for row in reader:
+            if row[0] == 'MPC':
+                cycle = int(row[1])
+                mismatches = 0
+                if n_as_mismatch: start = 2
+                else: start = 3
+                for m in row[start:]:
+                    mismatches += int(m)
+                mismatch_by_cycle[cycle] = mismatches
+            elif row[0] == 'SN' and row[1] == 'sequences:' and int(row[2]) == 0:
+                empty = True
+        if empty:
+            # special case -- no reads found (eg. no unknown reads)
+            # MPC returns 0 mismatches for cycle 1, but we want an empty dictionary
+            mismatch_by_cycle = {}
+        return mismatch_by_cycle
+
     def read_length_histogram(self, rows):
         """Process RL (read length), FRL (first RL) or LRL (last RL) rows for read length histogram"""
         histogram = {}
@@ -479,6 +537,9 @@ class bam_qc:
             output[key] = self.samtools_metrics.get(key)
         for key in self.custom_metrics.keys():
             output[key] = self.custom_metrics.get(key)
+        for key in self.mismatches_by_read.keys():
+            output[key] = self.mismatches_by_read.get(key)
+        output['alignment reference'] = self.reference
         output['insert max'] = self.expected_insert_max
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq
