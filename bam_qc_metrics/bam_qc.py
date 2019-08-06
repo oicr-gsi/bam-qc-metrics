@@ -12,6 +12,10 @@ class base:
 
     PRECISION = 1 # number of decimal places for rounded output
     FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
+    READ_1_LENGTH_KEY = 'read 1'
+    READ_2_LENGTH_KEY = 'read 2'
+    MAX_READ_LENGTH_KEY = 'max_read_length'
+    START_POINTS_KEY = 'start points'
     UNMAPPED_READS_KEY = 'unmapped reads'
 
 class bam_qc(base):
@@ -38,10 +42,6 @@ class bam_qc(base):
         'sample'
     ]
     RANDOM_SEED = 42
-    READ_1_INDEX = 0
-    READ_2_INDEX = 1
-    READ_UNKNOWN_INDEX = 2
-    START_POINTS_KEY = 'start points'
 
     def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
                  mark_duplicates_path=None, n_as_mismatch=False, skip_below_mapq=None,
@@ -54,7 +54,6 @@ class bam_qc(base):
         self.mark_duplicates_metrics = self.DEFAULT_MARK_DUPLICATES_METRICS
         self.metadata = None
         self.mismatches_by_read = None
-        self.qc_input_bam_path = None
         self.qual_fail_reads = None
         self.reads_per_start_point = None
         self.reference = reference
@@ -72,26 +71,29 @@ class bam_qc(base):
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         # apply quality filter (if any); get input path for downsampling
         result = self.apply_mapq_filter(bam_path)
-        (ds_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
+        (fast_finder_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
-        fast_finder = fast_metric_finder(ds_input_path,
+        fast_finder = fast_metric_finder(fast_finder_input_path,
                                          self.reference,
                                          self.expected_insert_max)
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
-        # apply downsampling (if any); self.qc_input_bam_path is input to all subsequent QC steps
+        # apply downsampling (if any)
         if sample_rate != None and sample_rate > 1:
             self.sample_rate = sample_rate
-            self.qc_input_bam_path = self.generate_downsampled_bam(ds_input_path, self.sample_rate)
+            slow_finder_input_path = self.generate_downsampled_bam(fast_finder_input_path,
+                                                                   self.sample_rate)
         else:
             self.sample_rate = 1
-            self.qc_input_bam_path = ds_input_path
-        # find remaining metrics
-        self.bedtools_metrics = self.evaluate_bedtools_metrics()
-        self.custom_metrics = self.evaluate_custom_metrics(fast_finder.read_1_length,
-                                                           fast_finder.read_2_length,
-                                                           fast_finder.max_read_length)
-        self.reads_per_start_point = self.evaluate_reads_per_start_point(self.custom_metrics[self.START_POINTS_KEY])
-        del self.custom_metrics[self.START_POINTS_KEY] # not needed for JSON output
+            slow_finder_input_path = fast_finder_input_path
+        # find 'slow' metrics on (maybe) downsampled dataset
+        slow_finder = slow_metric_finder(slow_finder_input_path,
+                                         self.target_path,
+                                         fast_finder.read_length_summary())
+        self.slow_metrics = slow_finder.metrics
+
+        self.reads_per_start_point = self.evaluate_reads_per_start_point(slow_finder_input_path,
+                                                                         self.slow_metrics[self.START_POINTS_KEY])
+        del self.slow_metrics[self.START_POINTS_KEY] # not needed for JSON output
 
     def apply_mapq_filter(self, bam_path):
         """
@@ -129,126 +131,16 @@ class bam_qc(base):
         if self.tmp_object != None:
             self.tmp_object.cleanup()
         elif self.verbose:
-            sys.stderr.write("Omitting cleanup for user-specified temporary directory %s\n" % self.tmpdir)
+            sys.stderr.write("Omitting cleanup for user-specified "+\
+                             "temporary directory %s\n" % self.tmpdir)
 
-    def evaluate_bedtools_metrics(self):
-        metrics = {}
-        bamBedTool = pybedtools.BedTool(self.qc_input_bam_path)
-        targetBedTool = pybedtools.BedTool(self.target_path)
-        metrics['number of targets'] = targetBedTool.count()
-        metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
-        metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
-        # TODO add bedtools coverage metrics?
-        #coverage = targetBedTool.coverage(self.bam_path)
-        #print(coverage)
-        return metrics
-        
-    def evaluate_custom_metrics(self, read1_length, read2_length, max_read_length):
-        """
-        Iterate over the BAM file to compute custom metrics
-        Processes CIGAR strings; see p. 7 of https://samtools.github.io/hts-specs/SAMv1.pdf
-        read1_length and read2_length may be zero (if all data is 'unknown read'),
-        so we supply max_read_length separately
-        """
-        # Relevant CIGAR operations
-        op_names = {
-            0: 'aligned',
-            1: 'insertion',
-            2: 'deletion',
-            4: 'soft clip',
-            5: 'hard clip',
-        }
-        # initialize the metrics data structure
-        metrics = {
-            'hard clip bases': 0,
-            'soft clip bases': 0,
-            'readsMissingMDtags': 0,
-            self.START_POINTS_KEY: 0,
-        }
-        read_names = ['1', '2', '?']
-        read_lengths = [read1_length, read2_length, max_read_length]
-        for op_name in op_names.values():
-            for i in range(len(read_names)):
-                key = 'read %s %s by cycle' % (read_names[i], op_name)
-                if read_lengths[i] == 0:
-                    metrics[key] = {} # placeholder
-                else:
-                    metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
-        # metrics for unknown reads -- equivalents for reads 1 and 2 are derived from samtools
-        ur_count = 0
-        ur_length_total = 0
-        ur_length_histogram = {}
-        ur_quality_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
-        ur_total_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
-        ur_quality_histogram = {}
-        # set of unique start points
-        # start point is determined by fields 3 and 4 of the BAM record:
-        # reference sequence name and mapping position, respectively
-        # finding unique start points on the command line:
-        # samtools view $BAM_FILE | cut -f3,4 | sort | uniq | wc -l
-        start_point_set = set()
-        # iterate over the BAM file
-        consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
-        for read in pysam.AlignmentFile(self.qc_input_bam_path, 'rb').fetch(until_eof=True):
-            if not read.has_tag('MD'):
-                metrics['readsMissingMDtags'] += 1
-            if not read.is_unmapped:
-                start_point_set.add((read.reference_name, read.reference_start))
-            if read.query_length == 0: # all bases are hard clipped
-                metrics['hard clip bases'] += read.infer_read_length()
-                continue
-            cycle = 1
-            read_index = None
-            if read.is_read1: read_index = self.READ_1_INDEX
-            elif read.is_read2: read_index = self.READ_2_INDEX
-            else: read_index = self.READ_UNKNOWN_INDEX
-            if read.cigartuples != None:
-                if read.is_reverse: cigar_list = reversed(read.cigartuples)
-                else: cigar_list = read.cigartuples
-                for (op, length) in cigar_list:
-                    if op in op_names:
-                        if op == 4: metrics['soft clip bases'] += length
-                        elif op == 5: metrics['hard clip bases'] += length
-                        for i in range(length):
-                            key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
-                            metrics[key][cycle] += 1
-                            if op in consumes_query: cycle += 1
-                    elif op in consumes_query:
-                        cycle += length
-            if read_index == self.READ_UNKNOWN_INDEX:
-                ur_count += 1
-                ur_length = read.query_length
-                ur_length_total += ur_length
-                if ur_length in ur_length_histogram:
-                    ur_length_histogram[ur_length] += 1
-                else:
-                    ur_length_histogram[ur_length] = 1
-                for i in range(read.query_length):
-                    q = read.query_qualities[i]
-                    ur_quality_by_cycle[i+1] += q
-                    ur_total_by_cycle[i+1] += 1
-                    if q in ur_quality_histogram:
-                        ur_quality_histogram[q] += 1
-                    else:
-                        ur_quality_histogram[q] = 1
-        metrics[self.START_POINTS_KEY] = len(start_point_set)
-        metrics['read ? average length'] = round(float(ur_length_total) / ur_count, self.PRECISION) if ur_count > 0 else None
-        metrics['read ? length histogram'] = ur_length_histogram
-        for cycle in ur_quality_by_cycle.keys():
-            quality = ur_quality_by_cycle[cycle]
-            total = ur_total_by_cycle[cycle]
-            ur_quality_by_cycle[cycle] = round(float(quality)/total, self.PRECISION) if total > 0 else 0
-        metrics['read ? quality by cycle'] = ur_quality_by_cycle
-        metrics['read ? quality histogram'] = ur_quality_histogram
-        return metrics
-
-    def evaluate_reads_per_start_point(self, start_points):
+    def evaluate_reads_per_start_point(self, bam_path, start_points):
         """
         Find reads per start point, defined as (unique reads)/(unique start points)
         """
         reads_per_sp = None
         # count the reads, excluding secondary alignments (but including unmapped reads)
-        unique_reads = int(pysam.view('-c', '-F', '256', self.qc_input_bam_path).strip())
+        unique_reads = int(pysam.view('-c', '-F', '256', bam_path).strip())
         if start_points > 0:
             reads_per_sp = round(float(unique_reads)/start_points, self.FINE_PRECISION)
         else:
@@ -372,12 +264,10 @@ class bam_qc(base):
         output = {}
         for key in self.METADATA_KEYS:
             output[key] = self.metadata.get(key)
-        for key in self.bedtools_metrics.keys():
-            output[key] = self.bedtools_metrics.get(key)
         for key in self.fast_metrics.keys():
             output[key] = self.fast_metrics.get(key)
-        for key in self.custom_metrics.keys():
-            output[key] = self.custom_metrics.get(key)
+        for key in self.slow_metrics.keys():
+            output[key] = self.slow_metrics.get(key)
         output['alignment reference'] = self.reference
         output['insert max'] = self.expected_insert_max
         output['mark duplicates'] = self.mark_duplicates_metrics
@@ -400,8 +290,6 @@ class fast_metric_finder(base):
     """
     Find "fast" metric types which can be evaluated before downsampling
     Mostly uses native samtools stats, rather than custom metrics
-
-    Note: The 'unmapped reads' metric should be 0 on alignment-quality-filtered data
     """
     
     # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
@@ -477,7 +365,7 @@ class fast_metric_finder(base):
                 max_read_length = int(row[2])
                 break
         return max_read_length
-    
+
     def evaluate_mismatches(self):
         """
         Find mismatches by read using samtools stats with:
@@ -633,13 +521,156 @@ class fast_metric_finder(base):
         metrics['read 2 quality histogram'] = lfq_histogram        
         return metrics
 
+    def read_length_summary(self):
+        summary = {
+            self.READ_1_LENGTH_KEY: self.read_1_length,
+            self.READ_2_LENGTH_KEY: self.read_2_length,
+            self.MAX_READ_LENGTH_KEY: self.max_read_length,
+        }
+        return summary
     
-class post_downsample_metric_finder:
+class slow_metric_finder(base):
 
     """
-    Find metric types evaluated after downsampling
-    Includes custom iteration over BAM reads, eg. to process CIGAR strings
+    Find "slow" metric types which should be evaluated after downsampling (if any)
+
+    Includes:
+    - bedtools
+    - custom iteration over BAM reads, eg. to process CIGAR strings
     """
 
-    def __init__(self):
-        pass
+    READ_1_INDEX = 0
+    READ_2_INDEX = 1
+    READ_UNKNOWN_INDEX = 2
+
+    def __init__(self, bam_path, target_path, read_lengths):
+        self.bam_path = bam_path
+        self.target_path = target_path
+        self.read_lengths = read_lengths
+        self.metrics = self.evaluate_metrics()
+
+    def evaluate_bedtools_metrics(self):
+        metrics = {}
+        bamBedTool = pybedtools.BedTool(self.bam_path)
+        targetBedTool = pybedtools.BedTool(self.target_path)
+        metrics['number of targets'] = targetBedTool.count()
+        metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
+        metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+        # TODO add bedtools coverage metrics?
+        #coverage = targetBedTool.coverage(self.bam_path)
+        #print(coverage)
+        return metrics
+
+    def evaluate_custom_metrics(self):
+        """
+        Iterate over the BAM file to compute custom metrics
+        Processes CIGAR strings; see p. 7 of https://samtools.github.io/hts-specs/SAMv1.pdf
+        read1_length and read2_length may be zero (if all data is 'unknown read'),
+        so we supply max_read_length separately
+        """
+        # Relevant CIGAR operations
+        op_names = {
+            0: 'aligned',
+            1: 'insertion',
+            2: 'deletion',
+            4: 'soft clip',
+            5: 'hard clip',
+        }
+        # initialize the metrics data structure
+        metrics = {
+            'hard clip bases': 0,
+            'soft clip bases': 0,
+            'readsMissingMDtags': 0,
+            self.START_POINTS_KEY: 0,
+        }
+        read_names = ['1', '2', '?']
+        read_lengths = [
+            self.read_lengths[self.READ_1_LENGTH_KEY],
+            self.read_lengths[self.READ_2_LENGTH_KEY],
+            self.read_lengths[self.MAX_READ_LENGTH_KEY],
+        ]
+        for op_name in op_names.values():
+            for i in range(len(read_names)):
+                key = 'read %s %s by cycle' % (read_names[i], op_name)
+                if read_lengths[i] == 0:
+                    metrics[key] = {} # placeholder
+                else:
+                    metrics[key] = {j:0 for j in range(1, read_lengths[i]+1) }
+        # metrics for unknown reads -- equivalents for reads 1 and 2 are derived from samtools
+        ur_count = 0
+        ur_length_total = 0
+        ur_length_histogram = {}
+        ur_quality_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
+        ur_total_by_cycle = {i : 0 for i in range(1, read_lengths[2]+1)}
+        ur_quality_histogram = {}
+        # set of unique start points
+        # start point is determined by fields 3 and 4 of the BAM record:
+        # reference sequence name and mapping position, respectively
+        # finding unique start points on the command line:
+        # samtools view $BAM_FILE | cut -f3,4 | sort | uniq | wc -l
+        start_point_set = set()
+        # iterate over the BAM file
+        consumes_query = set([0,1,4,7,8]) # CIGAR op indices which increment the query cycle
+        for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
+            if not read.has_tag('MD'):
+                metrics['readsMissingMDtags'] += 1
+            if not read.is_unmapped:
+                start_point_set.add((read.reference_name, read.reference_start))
+            if read.query_length == 0: # all bases are hard clipped
+                metrics['hard clip bases'] += read.infer_read_length()
+                continue
+            cycle = 1
+            read_index = None
+            if read.is_read1: read_index = self.READ_1_INDEX
+            elif read.is_read2: read_index = self.READ_2_INDEX
+            else: read_index = self.READ_UNKNOWN_INDEX
+            if read.cigartuples != None:
+                if read.is_reverse: cigar_list = reversed(read.cigartuples)
+                else: cigar_list = read.cigartuples
+                for (op, length) in cigar_list:
+                    if op in op_names:
+                        if op == 4: metrics['soft clip bases'] += length
+                        elif op == 5: metrics['hard clip bases'] += length
+                        for i in range(length):
+                            key = 'read %s %s by cycle' % (read_names[read_index], op_names[op])
+                            metrics[key][cycle] += 1
+                            if op in consumes_query: cycle += 1
+                    elif op in consumes_query:
+                        cycle += length
+            if read_index == self.READ_UNKNOWN_INDEX:
+                ur_count += 1
+                ur_length = read.query_length
+                ur_length_total += ur_length
+                if ur_length in ur_length_histogram:
+                    ur_length_histogram[ur_length] += 1
+                else:
+                    ur_length_histogram[ur_length] = 1
+                for i in range(read.query_length):
+                    q = read.query_qualities[i]
+                    ur_quality_by_cycle[i+1] += q
+                    ur_total_by_cycle[i+1] += 1
+                    if q in ur_quality_histogram:
+                        ur_quality_histogram[q] += 1
+                    else:
+                        ur_quality_histogram[q] = 1
+        metrics[self.START_POINTS_KEY] = len(start_point_set)
+        metrics['read ? average length'] = round(float(ur_length_total) / ur_count, self.PRECISION) if ur_count > 0 else None
+        metrics['read ? length histogram'] = ur_length_histogram
+        for cycle in ur_quality_by_cycle.keys():
+            quality = ur_quality_by_cycle[cycle]
+            total = ur_total_by_cycle[cycle]
+            ur_quality_by_cycle[cycle] = round(float(quality)/total, self.PRECISION) if total > 0 else 0
+        metrics['read ? quality by cycle'] = ur_quality_by_cycle
+        metrics['read ? quality histogram'] = ur_quality_histogram
+        return metrics
+
+    def evaluate_metrics(self):
+        metrics = {}
+        metric_subsets = [
+            self.evaluate_bedtools_metrics(),
+            self.evaluate_custom_metrics()
+        ]
+        for metric_subset in metric_subsets:
+            for key in metric_subset.keys():
+                metrics[key] = metric_subset[key]
+        return metrics
