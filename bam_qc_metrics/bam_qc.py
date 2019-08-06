@@ -12,6 +12,7 @@ class base:
 
     PRECISION = 1 # number of decimal places for rounded output
     FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
+    UNMAPPED_READS_KEY = 'unmapped reads'
 
 class bam_qc(base):
 
@@ -76,8 +77,7 @@ class bam_qc(base):
         fast_finder = fast_metric_finder(ds_input_path,
                                          self.reference,
                                          self.expected_insert_max)
-        # TODO sanity check that unmapped reads from fast_finder is 0 if filtering in effect
-        self.fast_metrics = fast_finder.metrics        
+        self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
         # apply downsampling (if any); self.qc_input_bam_path is input to all subsequent QC steps
         if sample_rate != None and sample_rate > 1:
             self.sample_rate = sample_rate
@@ -99,7 +99,7 @@ class bam_qc(base):
         Also report the number of reads failing quality filters, and number of unmapped reads
         """
         filtered_bam_path = None
-        if self.skip_below_mapq != None and self.skip_below_mapq > 0:
+        if self.mapq_filter_is_active():
             excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
             included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
             pysam.view(bam_path,
@@ -280,6 +280,9 @@ class bam_qc(base):
                 sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
         return downsampled_path
 
+    def mapq_filter_is_active(self):
+        return self.skip_below_mapq != None and self.skip_below_mapq > 0
+
     def read_metadata(self, metadata_path):
         metadata = None
         if metadata_path != None:
@@ -349,7 +352,22 @@ class bam_qc(base):
             tmp_object = None
             tmpdir = tmpdir
         return (tmpdir, tmp_object)
-        
+
+    def update_unmapped_count(self, metrics):
+        """
+        Input 'metrics' was calculated after mapping quality filter was applied
+        If mapping quality filter is in effect, all unmapped reads should have been filtered out
+        Check this is so, and update the 'unmapped reads' metric entry
+        """
+        if self.mapq_filter_is_active():
+            if metrics[self.UNMAPPED_READS_KEY] > 0:
+                raise ValueError("Mapping quality filter is in effect, so all unmapped reads should "+\
+                                 "have been removed from BAM input; but 'reads unmapped' field from "+\
+                                 "samtools stats is non-zero.")
+            else:
+                metrics[self.UNMAPPED_READS_KEY] = self.unmapped_excluded_reads
+        return metrics
+
     def write_output(self, out_path):
         output = {}
         for key in self.METADATA_KEYS:
@@ -387,36 +405,35 @@ class fast_metric_finder(base):
     """
     
     # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
-    FLOAT_KEYS =  set([
+    FLOAT_KEYS = set([
         'error rate',
         'average quality',
         'insert size average',
         'insert size standard deviation',
         'percentage of properly paired reads (%)'
     ])
-
-    # map from SN field names to output keys
-    SN_KEY_MAP = {
-        'bases mapped (cigar)': 'bases mapped',
-        'average length': 'average read length',
-        'insert size average': 'insert size average',
-        'insert size standard deviation': 'insert size standard deviation',
-        'reads mapped': 'mapped reads',
-        'reads mapped and paired': 'reads mapped and paired',
-        'mismatches': 'mismatched bases',
-        # 'reads paired' > 0 implies 'paired end' == True
-        'reads paired': 'paired reads',
-        'pairs on different chromosomes': 'pairsMappedToDifferentChr',
-        'reads properly paired': 'properly paired reads',
-        'raw total sequences': 'total reads',
-        'reads unmapped': 'unmapped reads',
-        'non-primary alignments': 'non primary reads',
-    }
     
     def __init__(self, bam_path, reference, expected_insert_max):
         self.bam_path = bam_path
         self.reference = reference
         self.expected_insert_max = expected_insert_max
+        # map from SN field names to output keys
+        self.sn_key_map = {
+            'bases mapped (cigar)': 'bases mapped',
+            'average length': 'average read length',
+            'insert size average': 'insert size average',
+            'insert size standard deviation': 'insert size standard deviation',
+            'reads mapped': 'mapped reads',
+            'reads mapped and paired': 'reads mapped and paired',
+            'mismatches': 'mismatched bases',
+            # 'reads paired' > 0 implies 'paired end' == True
+            'reads paired': 'paired reads',
+            'pairs on different chromosomes': 'pairsMappedToDifferentChr',
+            'reads properly paired': 'properly paired reads',
+            'raw total sequences': 'total reads',
+            'reads unmapped': self.UNMAPPED_READS_KEY,
+            'non-primary alignments': 'non primary reads',
+        }
         self.samtools_stats = pysam.stats(self.bam_path)
         self.metrics = self.evaluate_metrics()
         # find secondary stats -- not for JSON export, but used to calculate subsequent metrics
@@ -541,13 +558,13 @@ class fast_metric_finder(base):
                 metrics['insert size histogram'][int(row[1])] = int(row[2])
             elif row[0] == 'SN':
                 samtools_key = re.sub(':$', '', row[1])
-                if samtools_key not in self.SN_KEY_MAP:
+                if samtools_key not in self.sn_key_map:
                     continue
                 elif samtools_key in self.FLOAT_KEYS:
                     val = float(row[2])
                 else:
                     val = int(row[2])
-                metrics[self.SN_KEY_MAP[samtools_key]] = val
+                metrics[self.sn_key_map[samtools_key]] = val
         metrics['paired end'] = metrics['paired reads'] > 0
         abnormal_count = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         metrics['pairsMappedAbnormallyFar'] = abnormal_count
