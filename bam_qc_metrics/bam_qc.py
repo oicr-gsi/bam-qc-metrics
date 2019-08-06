@@ -4,7 +4,16 @@
 
 import csv, json, os, re, pybedtools, pysam, sys, tempfile
 
-class bam_qc:
+class base:
+
+    """
+    Class for shared constants
+    """
+
+    PRECISION = 1 # number of decimal places for rounded output
+    FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
+
+class bam_qc(base):
 
     DEFAULT_MARK_DUPLICATES_METRICS =  {
         "ESTIMATED_LIBRARY_SIZE": None,
@@ -27,8 +36,6 @@ class bam_qc:
         'run name',
         'sample'
     ]
-    PRECISION = 1 # number of decimal places for rounded output
-    FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
     RANDOM_SEED = 42
     READ_1_INDEX = 0
     READ_2_INDEX = 1
@@ -370,7 +377,7 @@ class bam_qc:
             out_file.close()
 
 
-class fast_metric_finder:
+class fast_metric_finder(base):
 
     """
     Find "fast" metric types which can be evaluated before downsampling
@@ -405,8 +412,6 @@ class fast_metric_finder:
         'reads unmapped': 'unmapped reads',
         'non-primary alignments': 'non primary reads',
     }
-
-    PRECISION = 1 # TODO have a constants module for precision etc?
     
     def __init__(self, bam_path, reference, expected_insert_max):
         self.bam_path = bam_path
