@@ -6,6 +6,18 @@ import csv, json, os, re, pybedtools, pysam, sys, tempfile
 
 class bam_qc:
 
+    DEFAULT_MARK_DUPLICATES_METRICS =  {
+        "ESTIMATED_LIBRARY_SIZE": None,
+        "HISTOGRAM": {},
+        "LIBRARY": None,
+        "PERCENT_DUPLICATION": None,
+        "READ_PAIRS_EXAMINED": None,
+        "READ_PAIR_DUPLICATES": None,
+        "READ_PAIR_OPTICAL_DUPLICATES": None,
+        "UNMAPPED_READS": None,
+        "UNPAIRED_READS_EXAMINED": None,
+        "UNPAIRED_READ_DUPLICATES": None
+    }
     DOWNSAMPLE_WARNING_THRESHOLD = 1000
     METADATA_KEYS = [
         'barcode',
@@ -30,18 +42,7 @@ class bam_qc:
         self.bedtools_metrics = None
         self.custom_metrics = None
         self.expected_insert_max = expected_insert_max
-        self.mark_duplicates_metrics = {
-            "ESTIMATED_LIBRARY_SIZE": None,
-            "HISTOGRAM": {},
-            "LIBRARY": None,
-            "PERCENT_DUPLICATION": None,
-            "READ_PAIRS_EXAMINED": None,
-            "READ_PAIR_DUPLICATES": None,
-            "READ_PAIR_OPTICAL_DUPLICATES": None,
-            "UNMAPPED_READS": None,
-            "UNPAIRED_READS_EXAMINED": None,
-            "UNPAIRED_READ_DUPLICATES": None
-        }
+        self.mark_duplicates_metrics = self.DEFAULT_MARK_DUPLICATES_METRICS
         self.metadata = None
         self.mismatches_by_read = None
         self.qc_input_bam_path = None
@@ -50,59 +51,33 @@ class bam_qc:
         self.reference = reference
         self.sample_rate = 1
         self.samtools_metrics = None
-        self.target_path = target_path
         self.skip_below_mapq = skip_below_mapq
+        self.target_path = target_path
         self.tmp_object = None
+        self.tmpdir = None
         self.unmapped_excluded_reads = None
         self.verbose = verbose # if False, suppress non-critical messages to stderr
-        # set up temporary directory
-        if tmpdir==None:
-            self.tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
-            self.tmpdir = self.tmp_object.name
-        else:
-            self.tmpdir = tmpdir
-        # apply quality filter (if any)
-        excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
-        included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
-        ds_input_path = None # input to downsampling
-        if self.skip_below_mapq != None and self.skip_below_mapq > 0:
-            pysam.view(bam_path,
-                       '-b',
-                       '-q', str(self.skip_below_mapq),
-                       '-o', included_by_mapq_path,
-                       '-U', excluded_by_mapq_path,
-                       catch_stdout=False)
-            self.qual_fail_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
-            # unmapped reads will fail the mapping quality filter, by definition
-            # so if the quality filter is applied, find unmapped total from the excluded reads
-            unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
-            self.unmapped_excluded_reads = int(unmapped_raw.strip())
-            ds_input_path = included_by_mapq_path
-        else:
-            self.qual_fail_reads = 0
-            ds_input_path = bam_path
+        (self.tmpdir, self.tmp_object) = self.setup_tmpdir(tmpdir)
+        # apply quality filter (if any); get input path for downsampling
+        result = self.apply_mapq_filter(bam_path)
+        (ds_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # run samtools stats & find mismatches by read -- after filtering, before downsampling
         samtools_stats = pysam.stats(ds_input_path)
-        self.mismatches_by_read = self.evaluate_mismatches_by_read(ds_input_path, self.reference, n_as_mismatch)
-        # apply downsampling (if any)
-        # self.qc_input_bam_path is input to all subsequent QC steps
+        self.mismatches_by_read = self.evaluate_mismatches(ds_input_path)
+        # apply downsampling (if any); self.qc_input_bam_path is input to all subsequent QC steps
         if sample_rate != None and sample_rate > 1:
             self.sample_rate = sample_rate
             self.qc_input_bam_path = self.generate_downsampled_bam(ds_input_path, self.sample_rate)
         else:
             self.qc_input_bam_path = ds_input_path
         # read required keys from metadata (if any)
-        if metadata_path != None:
-            with open(metadata_path) as f: raw_metadata = json.loads(f.read())
-            self.metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
-        else:
-            if self.verbose: sys.stderr.write("Metadata file not given, using empty defaults\n")
-            self.metadata = {key: None for key in self.METADATA_KEYS}
+        self.metadata = self.read_metadata(metadata_path)
         # find metrics
         if mark_duplicates_path != None:
             self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
         self.bedtools_metrics = self.evaluate_bedtools_metrics()
         self.samtools_metrics = self.evaluate_samtools_metrics(samtools_stats)
+        # TODO make a class to process custom metrics -- existing method is too complicated
         # max_read_length needed if no reads are classified as read1 or read2
         max_read_length = self.evaluate_max_read_length(samtools_stats)
         read1_hist = self.samtools_metrics['read 1 length histogram']
@@ -112,6 +87,33 @@ class bam_qc:
         self.custom_metrics = self.evaluate_custom_metrics(read1_length, read2_length, max_read_length)
         self.reads_per_start_point = self.evaluate_reads_per_start_point(self.custom_metrics[self.START_POINTS_KEY])
         del self.custom_metrics[self.START_POINTS_KEY] # not needed for JSON output
+
+    def apply_mapq_filter(self, bam_path):
+        """
+        Write a BAM file filtered by alignment quality
+        Also report the number of reads failing quality filters, and number of unmapped reads
+        """
+        filtered_bam_path = None
+        if self.skip_below_mapq != None and self.skip_below_mapq > 0:
+            excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
+            included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
+            pysam.view(bam_path,
+                       '-b',
+                       '-q', str(self.skip_below_mapq),
+                       '-o', included_by_mapq_path,
+                       '-U', excluded_by_mapq_path,
+                       catch_stdout=False)
+            total_failed_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
+            # unmapped reads will fail the mapping quality filter, by definition
+            # so if the quality filter is applied, find unmapped total from the excluded reads
+            unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
+            total_unmapped_and_excluded = int(unmapped_raw.strip())
+            filtered_bam_path = included_by_mapq_path
+        else:
+            total_failed_reads = 0
+            total_unmapped_and_excluded = 0
+            filtered_bam_path = bam_path
+        return (filtered_bam_path, total_failed_reads, total_unmapped_and_excluded)
 
     def cleanup(self):
         """
@@ -258,7 +260,7 @@ class bam_qc:
                 break
         return max_read_length
 
-    def evaluate_mismatches_by_read(self, input_bam, reference, n_as_mismatch):
+    def evaluate_mismatches(self, input_bam):
         """
         Find mismatches by read using samtools stats with:
         -r to specify a reference and get mismatch counts
@@ -270,10 +272,10 @@ class bam_qc:
         """
         mismatches = {}
         # find read using flags; unknown read is neither R1 nor R2
-        if reference != None:
-            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '64', input_bam), n_as_mismatch)
-            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '128', input_bam), n_as_mismatch)
-            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-F', '192', input_bam), n_as_mismatch)
+        if self.reference != None:
+            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '64', input_bam))
+            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '128', input_bam))
+            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-F', '192', input_bam))
         else:
             r1_mismatch = {}
             r2_mismatch = {}
@@ -427,19 +429,17 @@ class bam_qc:
                 sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
         return downsampled_path
 
-    def mean_read_length(self, rows):
-        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length"""
-        total = 0
-        count = 0
-        for row in rows:
-            length = int(row[1])
-            length_count = int(row[2])
-            total += length * length_count
-            count += length_count
-        mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
-        return mean_rl
+    def read_metadata(self, metadata_path):
+        metadata = None
+        if metadata_path != None:
+            with open(metadata_path) as f: raw_metadata = json.loads(f.read())
+            metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
+        else:
+            if self.verbose: sys.stderr.write("Metadata file not given, using empty defaults\n")
+            metadata = {key: None for key in self.METADATA_KEYS}
+        return metadata
 
-    def parse_mismatch(self, samtools_stats, n_as_mismatch):
+    def parse_mismatch(self, samtools_stats):
         """
         Input is the string returned by pysam.stats
         Parse the mismatches by cycle; return an empty dictionary if no data found
@@ -456,7 +456,7 @@ class bam_qc:
             if row[0] == 'MPC':
                 cycle = int(row[1])
                 mismatches = 0
-                if n_as_mismatch: start = 2
+                if self.n_as_mismatch: start = 2
                 else: start = 3
                 for m in row[start:]:
                     mismatches += int(m)
@@ -526,6 +526,27 @@ class bam_qc:
                 metrics[keys[i]] = int(values[i])
         metrics['HISTOGRAM'] = hist
         return metrics
+
+    def mean_read_length(self, rows):
+        """Process RL (read length), FRL (first RL) or LRL (last RL) rows for mean read length"""
+        total = 0
+        count = 0
+        for row in rows:
+            length = int(row[1])
+            length_count = int(row[2])
+            total += length * length_count
+            count += length_count
+        mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
+        return mean_rl
+
+    def setup_tmpdir(self, tmpdir):
+        if tmpdir==None:
+            tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
+            tmpdir = self.tmp_object.name
+        else:
+            tmp_object = None
+            tmpdir = tmpdir
+        return (tmpdir, tmp_object)
         
     def write_output(self, out_path):
         output = {}
