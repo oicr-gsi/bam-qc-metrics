@@ -15,7 +15,6 @@ class base:
     READ_1_LENGTH_KEY = 'read 1'
     READ_2_LENGTH_KEY = 'read 2'
     MAX_READ_LENGTH_KEY = 'max_read_length'
-    START_POINTS_KEY = 'start points'
     UNMAPPED_READS_KEY = 'unmapped reads'
 
 class bam_qc(base):
@@ -55,7 +54,6 @@ class bam_qc(base):
         self.metadata = None
         self.mismatches_by_read = None
         self.qual_fail_reads = None
-        self.reads_per_start_point = None
         self.reference = reference
         self.sample_rate = None
         self.skip_below_mapq = skip_below_mapq
@@ -90,10 +88,6 @@ class bam_qc(base):
                                          self.target_path,
                                          fast_finder.read_length_summary())
         self.slow_metrics = slow_finder.metrics
-        # FIXME do this within the slow_metric_finder class
-        self.reads_per_start_point = self.evaluate_reads_per_start_point(slow_finder_input_path,
-                                                                         self.slow_metrics[self.START_POINTS_KEY])
-        del self.slow_metrics[self.START_POINTS_KEY] # not needed for JSON output
 
     def apply_mapq_filter(self, bam_path):
         """
@@ -133,20 +127,6 @@ class bam_qc(base):
         elif self.verbose:
             sys.stderr.write("Omitting cleanup for user-specified "+\
                              "temporary directory %s\n" % self.tmpdir)
-
-    def evaluate_reads_per_start_point(self, bam_path, start_points):
-        """
-        Find reads per start point, defined as (unique reads)/(unique start points)
-        """
-        # TODO FIXME move this into the slow_metric_finder class
-        reads_per_sp = None
-        # count the reads, excluding secondary alignments (but including unmapped reads)
-        unique_reads = int(pysam.view('-c', '-F', '256', bam_path).strip())
-        if start_points > 0:
-            reads_per_sp = round(float(unique_reads)/start_points, self.FINE_PRECISION)
-        else:
-            reads_per_sp = 0.0
-        return reads_per_sp
 
     def generate_downsampled_bam(self, bam_path, sample_rate):
         """
@@ -276,7 +256,6 @@ class bam_qc(base):
         output['qual fail reads'] = self.qual_fail_reads
         output['sample rate'] = self.sample_rate
         output['target file'] = os.path.split(self.target_path)[-1]
-        output['reads per start point'] = self.reads_per_start_point
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
@@ -324,7 +303,7 @@ class fast_metric_finder(base):
             'non-primary alignments': 'non primary reads',
         }
         self.samtools_stats = pysam.stats(self.bam_path)
-        self.metrics = self.evaluate_metrics()
+        self.metrics = self.evaluate_all_metrics()
         # find secondary stats -- not for JSON export, but used to calculate subsequent metrics
         self.max_read_length = self.evaluate_max_read_length()
         read1_hist = self.metrics['read 1 length histogram']
@@ -339,7 +318,7 @@ class fast_metric_finder(base):
                 count += insert_size_histogram[key]
         return count
         
-    def evaluate_metrics(self):
+    def evaluate_all_metrics(self):
         metrics = {}
         metric_subsets = [
             self.evaluate_mismatches(),
@@ -573,7 +552,18 @@ class slow_metric_finder(base):
         self.bam_path = bam_path
         self.target_path = target_path
         self.read_lengths = read_lengths
-        self.metrics = self.evaluate_metrics()
+        self.metrics = self.evaluate_all_metrics()
+
+    def evaluate_all_metrics(self):
+        metrics = {}
+        metric_subsets = [
+            self.evaluate_bedtools_metrics(),
+            self.evaluate_custom_metrics()
+        ]
+        for metric_subset in metric_subsets:
+            for key in metric_subset.keys():
+                metrics[key] = metric_subset[key]
+        return metrics
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
@@ -588,8 +578,8 @@ class slow_metric_finder(base):
         return metrics
 
     def evaluate_custom_metrics(self):
-        [metrics, ur_stats, start_point_set] = self.process_bam_file()
-        metrics[self.START_POINTS_KEY] = len(start_point_set)
+        [metrics, ur_stats, start_points] = self.process_bam_file()
+        metrics['reads per start point'] = self.evaluate_reads_per_start_point(start_points)
         ur_count = ur_stats[self.READ_COUNT_KEY]
         if ur_count > 0:
             total = float(ur_stats[self.LENGTH_TOTAL_KEY])
@@ -608,23 +598,24 @@ class slow_metric_finder(base):
         metrics['read ? quality histogram'] = ur_stats[self.QUALITY_HISTOGRAM_KEY]
         return metrics
 
-    def evaluate_metrics(self):
-        metrics = {}
-        metric_subsets = [
-            self.evaluate_bedtools_metrics(),
-            self.evaluate_custom_metrics()
-        ]
-        for metric_subset in metric_subsets:
-            for key in metric_subset.keys():
-                metrics[key] = metric_subset[key]
-        return metrics
+    def evaluate_reads_per_start_point(self, start_points):
+        """
+        Find reads per start point, defined as (unique reads)/(unique start points)
+        """
+        reads_per_sp = None
+        # count the reads, excluding secondary alignments (but including unmapped reads)
+        unique_reads = int(pysam.view('-c', '-F', '256', self.bam_path).strip())
+        if start_points > 0:
+            reads_per_sp = round(float(unique_reads)/start_points, self.FINE_PRECISION)
+        else:
+            reads_per_sp = 0.0
+        return reads_per_sp
 
     def initialize_bam_metrics(self):
         metrics = {
             self.HARD_CLIP_KEY: 0,
             self.SOFT_CLIP_KEY: 0,
             self.MISSING_MD_KEY: 0,
-            self.START_POINTS_KEY: 0,
         }
         read_length_keys = [
             self.READ_1_LENGTH_KEY,
@@ -709,4 +700,5 @@ class slow_metric_finder(base):
                         ur_stats[self.QUALITY_HISTOGRAM_KEY][q] += 1
                     else:
                         ur_stats[self.QUALITY_HISTOGRAM_KEY][q] = 1
-        return (metrics, ur_stats, start_point_set)
+        start_points = len(start_point_set)
+        return (metrics, ur_stats, start_points)
