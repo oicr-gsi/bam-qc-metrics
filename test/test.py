@@ -23,11 +23,24 @@ class test(unittest.TestCase):
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         self.reference = None
         self.n_as_mismatch = False
+        self.verbose = False
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def test_default_analysis(self):
-        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path, self.markdup_path,
-                    self.n_as_mismatch, self.quality, self.reference, sample_rate=None, tmpdir=self.tmpdir, verbose=False)
+        config =  {
+            "bam": self.bam_path,
+            "target": self.target_path,
+            "insert max": self.insert_max,
+            "metadata": self.metadata_path,
+            "mark duplicates": self.markdup_path,
+            "n as mismatch": self.n_as_mismatch,
+            "skip below mapq": self.quality,
+            "reference": self.reference,
+            "sample rate": None,
+            "temp dir": self.tmpdir,
+            "verbose": self.verbose
+        }
+        qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -57,10 +70,21 @@ class test(unittest.TestCase):
         qc.cleanup()
         
     def test_downsampled_analysis(self):
+        config =  {
+            "bam": self.bam_path,
+            "target": self.target_path,
+            "insert max": self.insert_max,
+            "metadata": self.metadata_path,
+            "mark duplicates": self.markdup_path,
+            "n as mismatch": self.n_as_mismatch,
+            "skip below mapq": self.quality,
+            "reference": self.reference,
+            "sample rate": 10,
+            "temp dir": self.tmpdir,
+            "verbose": self.verbose
+        }
         sample_rate = 10
-        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path, self.n_as_mismatch, self.quality, self.reference,
-                    sample_rate, tmpdir=self.tmpdir, verbose=False)
+        qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
@@ -93,9 +117,20 @@ class test(unittest.TestCase):
         # test possible missing inputs:
         # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
         # - FFQ/LFQ in samtools stats
-        qc = bam_qc(self.bam_path, self.target_path, self.insert_max, self.metadata_path,
-                    self.markdup_path, self.n_as_mismatch, self.quality, self.reference,
-                    sample_rate=None, tmpdir=self.tmpdir, verbose=False)
+        config =  {
+            "bam": self.bam_path,
+            "target": self.target_path,
+            "insert max": self.insert_max,
+            "metadata": self.metadata_path,
+            "mark duplicates": self.markdup_path,
+            "n as mismatch": self.n_as_mismatch,
+            "skip below mapq": self.quality,
+            "reference": self.reference,
+            "sample rate": None,
+            "temp dir": self.tmpdir,
+            "verbose": self.verbose
+        }
+        qc = bam_qc(config)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
         # test input file also has variant '## METRICS CLASS ...' line
         metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)

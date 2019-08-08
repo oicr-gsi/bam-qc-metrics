@@ -10,6 +10,8 @@ class base:
     Class for shared constants
     """
 
+    # TODO use an abstract base class for shared method/s in metric_finders
+    
     PRECISION = 1 # number of decimal places for rounded output
     FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
     READ_1_LENGTH_KEY = 'read 1'
@@ -42,33 +44,33 @@ class bam_qc(base):
     ]
     RANDOM_SEED = 42
 
-    def __init__(self, bam_path, target_path, expected_insert_max, metadata_path=None,
-                 mark_duplicates_path=None, n_as_mismatch=False, skip_below_mapq=None,
-                 reference=None, sample_rate=None, tmpdir=None, verbose=True):
-        # define instance variables
+    def __init__(self, config):
+        # read instance variables from config
+        self.expected_insert_max = config['insert max']
+        self.metadata = self.read_metadata(config['metadata'])
+        self.n_as_mismatch = config['n as mismatch']
+        self.reference = config['reference']
+        self.sample_rate = config['sample rate']
+        self.skip_below_mapq = config['skip below mapq']
+        self.target_path = config['target']
+        self.verbose = config['verbose']
+        # define other instance variables
         self.bedtools_metrics = None
         self.custom_metrics = None
-        self.expected_insert_max = expected_insert_max
         self.fast_metrics = None
         self.mark_duplicates_metrics = self.DEFAULT_MARK_DUPLICATES_METRICS
-        self.metadata = None
         self.mismatches_by_read = None
         self.qual_fail_reads = None
-        self.reference = reference
-        self.sample_rate = None
-        self.skip_below_mapq = skip_below_mapq
-        self.target_path = target_path
         self.tmp_object = None
         self.tmpdir = None
         self.unmapped_excluded_reads = None
-        self.verbose = verbose # if False, suppress non-critical messages to stderr
-        (self.tmpdir, self.tmp_object) = self.setup_tmpdir(tmpdir)
+        (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config['temp dir'])
         # read metadata and MarkDuplicates metrics
-        self.metadata = self.read_metadata(metadata_path)
-        if mark_duplicates_path != None:
-            self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(mark_duplicates_path)
+        markdup_path = config['mark duplicates']
+        if markdup_path != None:
+            self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(markdup_path)
         # apply quality filter (if any); get input path for downsampling
-        result = self.apply_mapq_filter(bam_path)
+        result = self.apply_mapq_filter(config['bam'])
         (fast_finder_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
         fast_finder = fast_metric_finder(fast_finder_input_path,
@@ -76,8 +78,7 @@ class bam_qc(base):
                                          self.expected_insert_max)
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
         # apply downsampling (if any)
-        if sample_rate != None and sample_rate > 1:
-            self.sample_rate = sample_rate
+        if self.sample_rate != None and self.sample_rate > 1:
             slow_finder_input_path = self.generate_downsampled_bam(fast_finder_input_path,
                                                                    self.sample_rate)
         else:

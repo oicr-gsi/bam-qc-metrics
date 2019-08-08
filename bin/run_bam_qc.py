@@ -100,17 +100,20 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
-    qc = bam_qc(args.bam,
-                args.target,
-                insert_max,
-                args.metadata,
-                args.mark_duplicates,
-                args.n_as_mismatch,
-                skip_below_mapq,
-                args.reference,
-                sample_rate,
-                args.temp_dir,
-                args.verbose)
+    config = {
+        "bam": args.bam,
+        "target": args.target,
+        "insert max": insert_max,
+        "metadata": args.metadata,
+        "mark duplicates": args.mark_duplicates,
+        "n as mismatch": args.n_as_mismatch,
+        "skip below mapq": skip_below_mapq,
+        "reference": args.reference,
+        "sample rate": sample_rate,
+        "temp dir": args.temp_dir,
+        "verbose": args.verbose
+    }
+    qc = bam_qc(config)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
