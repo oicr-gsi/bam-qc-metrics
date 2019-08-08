@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-import json, os, tempfile, unittest
+import json, os, sys, tempfile, unittest
 
 from bam_qc_metrics import bam_qc, fast_metric_finder
 
@@ -43,7 +43,14 @@ class test(unittest.TestCase):
             "total target size": 527189,
         }
         for key in expected_variables.keys():
-            self.assertEqual(expected_variables[key], output[key])
+            expected = expected_variables[key]
+            got = output[key]
+            try:
+                self.assertEqual(expected, got)
+            except AssertionError:
+                print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
+                      file=sys.stderr)
+                raise
         # now check all output data
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
@@ -69,7 +76,14 @@ class test(unittest.TestCase):
             "total target size": 527189,
         }
         for key in expected_variables.keys():
-            self.assertEqual(expected_variables[key], output[key])
+            expected = expected_variables[key]
+            got = output[key]
+            try:
+                self.assertEqual(expected, got)
+            except AssertionError:
+                print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
+                      file=sys.stderr)
+                raise
         # now check all output data
         with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
