@@ -658,32 +658,12 @@ class slow_metric_finder(base):
         ur_stats = self.initialize_unknown_read_stats()
         start_point_set = set()
         for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
-            if not read.has_tag('MD'):
-                metrics[self.MISSING_MD_KEY] += 1
-            if not read.is_unmapped:
-                start_point_set.add((read.reference_name, read.reference_start))
-            if read.query_length == 0: # all bases are hard clipped
-                metrics[self.HARD_CLIP_KEY] += read.infer_read_length()
-                continue
-            cycle = 1
             read_index = None
             if read.is_read1: read_index = self.READ_1_INDEX
             elif read.is_read2: read_index = self.READ_2_INDEX
             else: read_index = self.READ_UNKNOWN_INDEX
-            if read.cigartuples != None:
-                if read.is_reverse: cigar_list = reversed(read.cigartuples)
-                else: cigar_list = read.cigartuples
-                for (op, length) in cigar_list:
-                    if op in self.CIGAR_OP_NAMES:
-                        if op == 4: metrics['soft clip bases'] += length
-                        elif op == 5: metrics['hard clip bases'] += length
-                        for i in range(length):
-                            key = 'read %s %s by cycle' % (self.READ_NAMES[read_index],
-                                                           self.CIGAR_OP_NAMES[op])
-                            metrics[key][cycle] += 1
-                            if op in self.CONSUMES_QUERY: cycle += 1
-                    elif op in self.CONSUMES_QUERY:
-                        cycle += length
+            start_point_set = self.update_start_point_set(start_point_set, read)
+            metrics = self.update_metrics(metrics, read, read_index)
             if read_index == self.READ_UNKNOWN_INDEX:
                 ur_stats[self.READ_COUNT_KEY] += 1
                 ur_len = read.query_length
@@ -702,3 +682,33 @@ class slow_metric_finder(base):
                         ur_stats[self.QUALITY_HISTOGRAM_KEY][q] = 1
         start_points = len(start_point_set)
         return (metrics, ur_stats, start_points)
+
+    def update_metrics(self, metrics, read, read_index):
+        """ Update the metrics dictionary for a pysam 'read' object """
+        if not read.has_tag('MD'):
+            metrics[self.MISSING_MD_KEY] += 1
+        if read.query_length == 0: # all bases are hard clipped
+            metrics[self.HARD_CLIP_KEY] += read.infer_read_length()
+            return metrics
+        cycle = 1
+        if read.cigartuples != None:
+            if read.is_reverse: cigar_list = reversed(read.cigartuples)
+            else: cigar_list = read.cigartuples
+            for (op, length) in cigar_list:
+                if op in self.CIGAR_OP_NAMES:
+                    if op == 4: metrics['soft clip bases'] += length
+                    elif op == 5: metrics['hard clip bases'] += length
+                    for i in range(length):
+                        key = 'read %s %s by cycle' % (self.READ_NAMES[read_index],
+                                                       self.CIGAR_OP_NAMES[op])
+                        metrics[key][cycle] += 1
+                        if op in self.CONSUMES_QUERY: cycle += 1
+                elif op in self.CONSUMES_QUERY:
+                    cycle += length
+        return metrics
+
+    def update_start_point_set(self, start_point_set, read):
+        """ Update the start point set for a pysam 'read' object """
+        if not read.is_unmapped:
+            start_point_set.add((read.reference_name, read.reference_start))
+        return start_point_set
