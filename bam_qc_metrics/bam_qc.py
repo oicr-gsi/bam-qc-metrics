@@ -665,21 +665,7 @@ class slow_metric_finder(base):
             start_point_set = self.update_start_point_set(start_point_set, read)
             metrics = self.update_metrics(metrics, read, read_index)
             if read_index == self.READ_UNKNOWN_INDEX:
-                ur_stats[self.READ_COUNT_KEY] += 1
-                ur_len = read.query_length
-                ur_stats[self.LENGTH_TOTAL_KEY] += ur_len
-                if ur_len in ur_stats[self.LENGTH_HISTOGRAM_KEY]:
-                    ur_stats[self.LENGTH_HISTOGRAM_KEY][ur_len] += 1
-                else:
-                    ur_stats[self.LENGTH_HISTOGRAM_KEY][ur_len] += 1
-                for i in range(read.query_length):
-                    q = read.query_qualities[i]
-                    ur_stats[self.QUALITY_BY_CYCLE_KEY][i+1] += q
-                    ur_stats[self.TOTAL_BY_CYCLE_KEY][i+1] += 1
-                    if q in ur_stats[self.QUALITY_HISTOGRAM_KEY]:
-                        ur_stats[self.QUALITY_HISTOGRAM_KEY][q] += 1
-                    else:
-                        ur_stats[self.QUALITY_HISTOGRAM_KEY][q] = 1
+               ur_stats = self.update_ur_stats(ur_stats, read)
         start_points = len(start_point_set)
         return (metrics, ur_stats, start_points)
 
@@ -712,3 +698,22 @@ class slow_metric_finder(base):
         if not read.is_unmapped:
             start_point_set.add((read.reference_name, read.reference_start))
         return start_point_set
+
+    def update_ur_stats(self, ur_stats, read):
+        """ Update the unknown-read stats for a pysam 'read' object """
+        ur_stats[self.READ_COUNT_KEY] += 1
+        ur_len = read.query_length
+        ur_stats[self.LENGTH_TOTAL_KEY] += ur_len
+        if ur_len in ur_stats[self.LENGTH_HISTOGRAM_KEY]:
+            ur_stats[self.LENGTH_HISTOGRAM_KEY][ur_len] += 1
+        else:
+            ur_stats[self.LENGTH_HISTOGRAM_KEY][ur_len] += 1
+        for i in range(read.query_length):
+            q = read.query_qualities[i]
+            ur_stats[self.QUALITY_BY_CYCLE_KEY][i+1] += q
+            ur_stats[self.TOTAL_BY_CYCLE_KEY][i+1] += 1
+            if q in ur_stats[self.QUALITY_HISTOGRAM_KEY]:
+                ur_stats[self.QUALITY_HISTOGRAM_KEY][q] += 1
+            else:
+                ur_stats[self.QUALITY_HISTOGRAM_KEY][q] = 1
+        return ur_stats
