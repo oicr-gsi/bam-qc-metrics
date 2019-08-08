@@ -45,6 +45,7 @@ class bam_qc(base):
     RANDOM_SEED = 42
 
     def __init__(self, config):
+        self.validate_config_fields(config)
         # read instance variables from config
         self.expected_insert_max = config['insert max']
         self.metadata = self.read_metadata(config['metadata'])
@@ -265,6 +266,27 @@ class bam_qc(base):
         if out_path != '-':
             out_file.close()
 
+    def validate_config_fields(self, config):
+        """ Validate keys of the config dictionary for __init__ """
+        expected = set([
+            'bam',
+            'insert max',
+            'mark duplicates',
+            'metadata',
+            'n as mismatch',
+            'reference',
+            'sample rate',
+            'skip below mapq',
+            'target',
+            'temp dir',
+            'verbose'
+        ])
+        found = set(config.keys())
+        if not expected == found:
+            msg = "Config fields are not valid\n"
+            msg = msg + "Fields expected and not found: "+str(expected - found)+"\n"
+            msg = msg + "Fields found and not expected: "+str(found - expected)+"\n"
+            raise ValueError(msg)
 
 class fast_metric_finder(base):
 
