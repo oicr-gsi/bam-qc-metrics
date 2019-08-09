@@ -11,6 +11,10 @@ Fixed:
 Added:
 - GP-2038 Report software versions in JSON
 
+Changed:
+- GP-2040 refactoring
+- Separate classes for "fast" metrics (found before downsampling) and "slow" (after)
+
 v0.1.4: 2019-07-26
 ------------------
 
