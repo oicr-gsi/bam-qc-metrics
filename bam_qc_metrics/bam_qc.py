@@ -10,8 +10,6 @@ class base:
     Class for shared constants
     """
 
-    # TODO use an abstract base class for shared method/s in metric_finders
-    
     PRECISION = 1 # number of decimal places for rounded output
     FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
     READ_1_LENGTH_KEY = 'read 1'
@@ -21,6 +19,17 @@ class base:
 
 class bam_qc(base):
 
+    CONFIG_KEY_BAM = 'bam'
+    CONFIG_KEY_INSERT_MAX = 'insert max'
+    CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
+    CONFIG_KEY_METADATA = 'metadata'
+    CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
+    CONFIG_KEY_REFERENCE = 'reference'
+    CONFIG_KEY_SAMPLE_RATE = 'sample rate'
+    CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
+    CONFIG_KEY_TARGET = 'target'
+    CONFIG_KEY_TEMP_DIR = 'temp dir'
+    CONFIG_KEY_VERBOSE = 'verbose'
     DEFAULT_MARK_DUPLICATES_METRICS =  {
         "ESTIMATED_LIBRARY_SIZE": None,
         "HISTOGRAM": {},
@@ -47,31 +56,23 @@ class bam_qc(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
-        self.expected_insert_max = config['insert max']
-        self.metadata = self.read_metadata(config['metadata'])
-        self.n_as_mismatch = config['n as mismatch']
-        self.reference = config['reference']
-        self.sample_rate = config['sample rate']
-        self.skip_below_mapq = config['skip below mapq']
-        self.target_path = config['target']
-        self.verbose = config['verbose']
+        self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
+        self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
+        self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
+        self.n_as_mismatch = config[self.CONFIG_KEY_N_AS_MISMATCH]
+        self.reference = config[self.CONFIG_KEY_REFERENCE]
+        self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
+        self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
+        self.target_path = config[self.CONFIG_KEY_TARGET]
+        self.verbose = config[self.CONFIG_KEY_VERBOSE]
         # define other instance variables
-        self.bedtools_metrics = None
-        self.custom_metrics = None
         self.fast_metrics = None
-        self.mark_duplicates_metrics = self.DEFAULT_MARK_DUPLICATES_METRICS
-        self.mismatches_by_read = None
         self.qual_fail_reads = None
-        self.tmp_object = None
-        self.tmpdir = None
+        self.slow_metrics = None
+        (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
         self.unmapped_excluded_reads = None
-        (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config['temp dir'])
-        # read metadata and MarkDuplicates metrics
-        markdup_path = config['mark duplicates']
-        if markdup_path != None:
-            self.mark_duplicates_metrics = self.read_mark_duplicates_metrics(markdup_path)
         # apply quality filter (if any); get input path for downsampling
-        result = self.apply_mapq_filter(config['bam'])
+        result = self.apply_mapq_filter(config[self.CONFIG_KEY_BAM])
         (fast_finder_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
         fast_finder = fast_metric_finder(fast_finder_input_path,
@@ -168,7 +169,9 @@ class bam_qc(base):
             metadata = {key: None for key in self.METADATA_KEYS}
         return metadata
     
-    def read_mark_duplicates_metrics(self, input_path):
+    def read_mark_dup(self, input_path):
+        if input_path == None:
+            return self.DEFAULT_MARK_DUPLICATES_METRICS
         section = 0
         line_count = 0
         with open(input_path) as f: lines = f.readlines()
@@ -269,23 +272,23 @@ class bam_qc(base):
     def validate_config_fields(self, config):
         """ Validate keys of the config dictionary for __init__ """
         expected = set([
-            'bam',
-            'insert max',
-            'mark duplicates',
-            'metadata',
-            'n as mismatch',
-            'reference',
-            'sample rate',
-            'skip below mapq',
-            'target',
-            'temp dir',
-            'verbose'
+            self.CONFIG_KEY_BAM,
+            self.CONFIG_KEY_INSERT_MAX,
+            self.CONFIG_KEY_MARK_DUPLICATES,
+            self.CONFIG_KEY_METADATA,
+            self.CONFIG_KEY_N_AS_MISMATCH,
+            self.CONFIG_KEY_REFERENCE,
+            self.CONFIG_KEY_SAMPLE_RATE,
+            self.CONFIG_KEY_SKIP_BELOW_MAPQ,
+            self.CONFIG_KEY_TARGET,
+            self.CONFIG_KEY_TEMP_DIR,
+            self.CONFIG_KEY_VERBOSE
         ])
         found = set(config.keys())
         if not expected == found:
             msg = "Config fields are not valid\n"
-            msg = msg + "Fields expected and not found: "+str(expected - found)+"\n"
-            msg = msg + "Fields found and not expected: "+str(found - expected)+"\n"
+            msg = msg+"Fields expected and not found: "+str(expected - found)+"\n"
+            msg = msg+"Fields found and not expected: "+str(found - expected)+"\n"
             raise ValueError(msg)
 
 class fast_metric_finder(base):

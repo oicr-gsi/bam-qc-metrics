@@ -133,7 +133,7 @@ class test(unittest.TestCase):
         qc = bam_qc(config)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
         # test input file also has variant '## METRICS CLASS ...' line
-        metrics_found = qc.read_mark_duplicates_metrics(self.markdup_path_low_cover)
+        metrics_found = qc.read_mark_dup(self.markdup_path_low_cover)
         with (open(self.expected_metrics_low_cover)) as f: metrics_expected = json.loads(f.read())
         # Found/expected HISTOGRAM keys are integers and strings, respectively.
         # (Annoyingly, JSON format insists dictionary keys must be strings)
