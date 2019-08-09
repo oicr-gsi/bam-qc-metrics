@@ -56,6 +56,7 @@ class bam_qc(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
+        self.verbose = config[self.CONFIG_KEY_VERBOSE] # set this first; enables warnings
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
@@ -64,7 +65,6 @@ class bam_qc(base):
         self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
         self.target_path = config[self.CONFIG_KEY_TARGET]
-        self.verbose = config[self.CONFIG_KEY_VERBOSE]
         # define other instance variables
         self.fast_metrics = None
         self.qual_fail_reads = None
@@ -225,7 +225,7 @@ class bam_qc(base):
     def setup_tmpdir(self, tmpdir):
         if tmpdir==None:
             tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
-            tmpdir = self.tmp_object.name
+            tmpdir = tmp_object.name
         else:
             tmp_object = None
         return (tmpdir, tmp_object)
