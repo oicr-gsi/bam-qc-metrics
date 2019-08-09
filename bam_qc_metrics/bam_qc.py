@@ -150,7 +150,7 @@ class bam_qc(base):
             sample_arg = str(self.RANDOM_SEED + sample_decimal)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
-            # TODO Report size of downsampled file in JSON output?
+            # TODO Report random seed in JSON output?
             sampled = int(pysam.view('-c', downsampled_path).strip())
             if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
                 sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
@@ -228,7 +228,6 @@ class bam_qc(base):
             tmpdir = self.tmp_object.name
         else:
             tmp_object = None
-            tmpdir = tmpdir
         return (tmpdir, tmp_object)
 
     def update_unmapped_count(self, metrics):
@@ -239,9 +238,10 @@ class bam_qc(base):
         """
         if self.mapq_filter_is_active():
             if metrics[self.UNMAPPED_READS_KEY] > 0:
-                raise ValueError("Mapping quality filter is in effect, so all unmapped reads should "+\
-                                 "have been removed from BAM input; but 'reads unmapped' field from "+\
-                                 "samtools stats is non-zero.")
+                raise ValueError("Mapping quality filter is in effect, so all unmapped "+\
+                                 "reads should have been removed from BAM input; but 'reads "+\
+                                 "unmapped' field from samtools stats is %d." \
+                                 % metrics[self.UNMAPPED_READS_KEY])
             else:
                 metrics[self.UNMAPPED_READS_KEY] = self.unmapped_excluded_reads
         return metrics
@@ -385,9 +385,15 @@ class fast_metric_finder(base):
         mismatches = {}
         # find read using flags; unknown read is neither R1 nor R2
         if self.reference != None:
-            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '64', self.bam_path))
-            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-f', '128', self.bam_path))
-            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference, '-F', '192', self.bam_path))
+            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+                                                          '-f', '64',
+                                                          self.bam_path))
+            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+                                                          '-f', '128',
+                                                          self.bam_path))
+            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+                                                          '-F', '192',
+                                                          self.bam_path))
         else:
             r1_mismatch = {}
             r2_mismatch = {}
