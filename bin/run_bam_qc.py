@@ -95,6 +95,9 @@ def main():
                         'against. Optional; if given, must be sorted in same order as BAM file.')
     parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to /tmp')
     parser.add_argument('-v', '--verbose', action='store_true', help='Print additional messages to STDERR')
+    parser.add_argument('-w', '--workflow-version', metavar='VERSION',
+                        help='Version of the workflow being used to run bam-qc-metrics. '+\
+                        'Optional. If given, will be recorded in JSON output.')
     args = parser.parse_args()
     if not validate_args(args): exit(1)
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
@@ -111,7 +114,8 @@ def main():
         "reference": args.reference,
         "sample rate": sample_rate,
         "temp dir": args.temp_dir,
-        "verbose": args.verbose
+        "verbose": args.verbose,
+        "workflow version": args.workflow_version
     }
     qc = bam_qc(config)
     qc.write_output(args.out)

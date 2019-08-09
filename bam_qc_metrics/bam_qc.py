@@ -30,6 +30,7 @@ class bam_qc(base):
     CONFIG_KEY_TARGET = 'target'
     CONFIG_KEY_TEMP_DIR = 'temp dir'
     CONFIG_KEY_VERBOSE = 'verbose'
+    CONFIG_KEY_WORKFLOW_VERSION = 'workflow version'
     DEFAULT_MARK_DUPLICATES_METRICS =  {
         "ESTIMATED_LIBRARY_SIZE": None,
         "HISTOGRAM": {},
@@ -65,8 +66,10 @@ class bam_qc(base):
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
         self.target_path = config[self.CONFIG_KEY_TARGET]
         self.verbose = config[self.CONFIG_KEY_VERBOSE]
+        self.workflow_version = config[self.CONFIG_KEY_WORKFLOW_VERSION]
         # define other instance variables
         self.fast_metrics = None
+        self.package_version = self.read_package_version()
         self.qual_fail_reads = None
         self.slow_metrics = None
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
@@ -222,10 +225,16 @@ class bam_qc(base):
         metrics['HISTOGRAM'] = hist
         return metrics
 
+    def read_package_version(self):
+        in_path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir, 'VERSION'))
+        with open(in_path) as version_file:
+            package_version = version_file.read().strip()
+        return package_version
+
     def setup_tmpdir(self, tmpdir):
         if tmpdir==None:
             tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
-            tmpdir = self.tmp_object.name
+            tmpdir = tmp_object.name
         else:
             tmp_object = None
         return (tmpdir, tmp_object)
@@ -259,8 +268,10 @@ class bam_qc(base):
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq
         output['qual fail reads'] = self.qual_fail_reads
+        output['package version'] = self.package_version
         output['sample rate'] = self.sample_rate
         output['target file'] = os.path.split(self.target_path)[-1]
+        output['workflow version'] = self.workflow_version
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
@@ -282,7 +293,8 @@ class bam_qc(base):
             self.CONFIG_KEY_SKIP_BELOW_MAPQ,
             self.CONFIG_KEY_TARGET,
             self.CONFIG_KEY_TEMP_DIR,
-            self.CONFIG_KEY_VERBOSE
+            self.CONFIG_KEY_VERBOSE,
+            self.CONFIG_KEY_WORKFLOW_VERSION
         ])
         found = set(config.keys())
         if not expected == found:

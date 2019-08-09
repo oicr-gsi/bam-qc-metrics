@@ -24,6 +24,7 @@ class test(unittest.TestCase):
         self.reference = None
         self.n_as_mismatch = False
         self.verbose = False
+        self.version = "TEST"
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def test_default_analysis(self):
@@ -38,7 +39,8 @@ class test(unittest.TestCase):
             "reference": self.reference,
             "sample rate": None,
             "temp dir": self.tmpdir,
-            "verbose": self.verbose
+            "verbose": self.verbose,
+            "workflow version": self.version
         }
         qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out.json')
@@ -81,7 +83,8 @@ class test(unittest.TestCase):
             "reference": self.reference,
             "sample rate": 10,
             "temp dir": self.tmpdir,
-            "verbose": self.verbose
+            "verbose": self.verbose,
+            "workflow version": self.version
         }
         sample_rate = 10
         qc = bam_qc(config)
@@ -128,7 +131,8 @@ class test(unittest.TestCase):
             "reference": self.reference,
             "sample rate": None,
             "temp dir": self.tmpdir,
-            "verbose": self.verbose
+            "verbose": self.verbose,
+            "workflow version": self.version
         }
         qc = bam_qc(config)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
