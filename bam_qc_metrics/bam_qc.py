@@ -17,6 +17,19 @@ class base:
     MAX_READ_LENGTH_KEY = 'max_read_length'
     UNMAPPED_READS_KEY = 'unmapped reads'
 
+    def read_package_version(self):
+        in_path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir, 'VERSION'))
+        with open(in_path) as version_file:
+            package_version = version_file.read().strip()
+        return package_version
+
+
+class version_reader(base):
+
+    def print_package_version(self):
+        print("bam-qc-metrics: Package version", self.read_package_version())
+
+
 class bam_qc(base):
 
     CONFIG_KEY_BAM = 'bam'
@@ -224,12 +237,6 @@ class bam_qc(base):
                 metrics[keys[i]] = int(values[i])
         metrics['HISTOGRAM'] = hist
         return metrics
-
-    def read_package_version(self):
-        in_path = os.path.realpath(os.path.join(os.path.dirname(__file__), os.pardir, 'VERSION'))
-        with open(in_path) as version_file:
-            package_version = version_file.read().strip()
-        return package_version
 
     def setup_tmpdir(self, tmpdir):
         if tmpdir==None:
