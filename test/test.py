@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-import json, os, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 
 from bam_qc_metrics import bam_qc, fast_metric_finder
 
@@ -37,24 +37,8 @@ class test(unittest.TestCase):
         self.verbose = False
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
-    def test_default_analysis(self):
-        config =  {
-            bam_qc.CONFIG_KEY_BAM: self.bam_path,
-            bam_qc.CONFIG_KEY_TARGET: self.target_path,
-            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
-            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
-            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
-            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
-            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
-            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
-            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
-            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
-        }
-        qc = bam_qc(config)
-        out_path = os.path.join(self.tmpdir, 'out.json')
-        qc.write_output(out_path)
-        self.assertTrue(os.path.exists(out_path))
+    def assert_default_output_ok(self, out_path):
+        # default analysis parameters -- use for basic class and script tests
         with (open(out_path)) as f: output = json.loads(f.read())
         # do individual sanity checks on some variables
         # helps validate results if expected output JSON file has been changed
@@ -78,6 +62,25 @@ class test(unittest.TestCase):
         # now check all output data
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
         self.assertEqual(output, expected)
+
+    def test_default_analysis(self):
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out.json')
+        qc.write_output(out_path)
+        self.assert_default_output_ok(out_path)
         qc.cleanup()
         
     def test_downsampled_analysis(self):
@@ -166,6 +169,35 @@ class test(unittest.TestCase):
         fq_expected = ({},{})
         self.assertEqual(fq_expected, fq_result)
         qc.cleanup()
+
+    def test_script(self):
+        relative_path = os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'run_bam_qc.py')
+        script = os.path.realpath(relative_path)
+        out_path = os.path.join(self.tmpdir, 'script_out.json')
+        args = [
+            script,
+            '--bam', self.bam_path,
+            '--target', self.target_path,
+            '--insert-max', str(self.insert_max),
+            '--metadata', self.metadata_path,
+            '--mark-duplicates', self.markdup_path,
+            '--out', out_path,
+            '--skip-below-mapq', str(self.quality),
+            '--reference', self.reference,
+            '--temp-dir', self.tmpdir,
+        ]
+        if self.n_as_mismatch:
+            args.append('--n-as-mismatch')
+        if self.verbose:
+            args.append('--verbose')
+        result = subprocess.run(args)
+        try:
+            result.check_returncode()
+        except CalledProcessError:
+            print("STANDARD OUTPUT: ", result.stdout, file=sys.stderr)
+            print("STANDARD ERROR: ", result.stderr, file=sys.stderr)
+            raise
+        self.assert_default_output_ok(out_path)
         
     def tearDown(self):
         self.tmp.cleanup()

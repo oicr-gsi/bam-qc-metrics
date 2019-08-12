@@ -82,7 +82,7 @@ def main():
                         'Only relevant if a reference is given with -r.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
                         help='Path for JSON output, or - for STDOUT. Required.')
-    parser.add_argument('-q', '--skip_below_mapq', metavar='QSCORE',
+    parser.add_argument('-q', '--skip-below-mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
     parser.add_argument('-r', '--reference', metavar='PATH',
                         help='Path to FASTA reference used to align the BAM file. Used to find '+\
