@@ -39,17 +39,17 @@ class test(unittest.TestCase):
 
     def test_default_analysis(self):
         config =  {
-            "bam": self.bam_path,
-            "target": self.target_path,
-            "insert max": self.insert_max,
-            "metadata": self.metadata_path,
-            "mark duplicates": self.markdup_path,
-            "n as mismatch": self.n_as_mismatch,
-            "skip below mapq": self.quality,
-            "reference": self.reference,
-            "sample rate": None,
-            "temp dir": self.tmpdir,
-            "verbose": self.verbose
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
         }
         qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out.json')
@@ -81,20 +81,20 @@ class test(unittest.TestCase):
         qc.cleanup()
         
     def test_downsampled_analysis(self):
-        config =  {
-            "bam": self.bam_path,
-            "target": self.target_path,
-            "insert max": self.insert_max,
-            "metadata": self.metadata_path,
-            "mark duplicates": self.markdup_path,
-            "n as mismatch": self.n_as_mismatch,
-            "skip below mapq": self.quality,
-            "reference": self.reference,
-            "sample rate": 10,
-            "temp dir": self.tmpdir,
-            "verbose": self.verbose
-        }
         sample_rate = 10
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
+        }
         qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
@@ -106,7 +106,7 @@ class test(unittest.TestCase):
             "inserted bases": 315,
             "reads per start point": 1.002, # downsampled
             "readsMissingMDtags": 7874, # downsampled
-            "sample rate": 10,
+            "sample rate": sample_rate,
             "total reads": 80020,
             "total target size": 527189,
         }
@@ -129,17 +129,17 @@ class test(unittest.TestCase):
         # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
         # - FFQ/LFQ in samtools stats
         config =  {
-            "bam": self.bam_path,
-            "target": self.target_path,
-            "insert max": self.insert_max,
-            "metadata": self.metadata_path,
-            "mark duplicates": self.markdup_path,
-            "n as mismatch": self.n_as_mismatch,
-            "skip below mapq": self.quality,
-            "reference": self.reference,
-            "sample rate": None,
-            "temp dir": self.tmpdir,
-            "verbose": self.verbose
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
         }
         qc = bam_qc(config)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
