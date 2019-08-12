@@ -82,7 +82,7 @@ def main():
                         'Only relevant if a reference is given with -r.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
                         help='Path for JSON output, or - for STDOUT. Required.')
-    parser.add_argument('-q', '--skip_below_mapq', metavar='QSCORE',
+    parser.add_argument('-q', '--skip-below-mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
     parser.add_argument('-r', '--reference', metavar='PATH',
                         help='Path to FASTA reference used to align the BAM file. Used to find '+\
@@ -100,17 +100,20 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
-    qc = bam_qc(args.bam,
-                args.target,
-                insert_max,
-                args.metadata,
-                args.mark_duplicates,
-                args.n_as_mismatch,
-                skip_below_mapq,
-                args.reference,
-                sample_rate,
-                args.temp_dir,
-                args.verbose)
+    config = {
+        bam_qc.CONFIG_KEY_BAM: args.bam,
+        bam_qc.CONFIG_KEY_TARGET: args.target,
+        bam_qc.CONFIG_KEY_INSERT_MAX: insert_max,
+        bam_qc.CONFIG_KEY_METADATA: args.metadata,
+        bam_qc.CONFIG_KEY_MARK_DUPLICATES: args.mark_duplicates,
+        bam_qc.CONFIG_KEY_N_AS_MISMATCH: args.n_as_mismatch,
+        bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: skip_below_mapq,
+        bam_qc.CONFIG_KEY_REFERENCE: args.reference,
+        bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
+        bam_qc.CONFIG_KEY_TEMP_DIR: args.temp_dir,
+        bam_qc.CONFIG_KEY_VERBOSE: args.verbose
+    }
+    qc = bam_qc(config)
     qc.write_output(args.out)
 
 if __name__ == "__main__":
