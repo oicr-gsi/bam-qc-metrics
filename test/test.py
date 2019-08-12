@@ -6,6 +6,9 @@ from bam_qc_metrics import bam_qc, fast_metric_finder
 
 class test(unittest.TestCase):
 
+    OICR_REF = '/oicr/data/reference/genomes/homo_sapiens/UCSC/Genomic/UCSC_hg19/fasta/hg19.fa'
+    LOCAL_REF = os.path.join(os.path.expanduser('~'), 'data/reference/hg19.fa')
+
     def setUp(self):
         self.quality = 30
         self.insert_max = 1500
@@ -21,7 +24,15 @@ class test(unittest.TestCase):
         self.expected_path = os.path.join(self.datadir, 'expected.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
-        self.reference = None
+        if os.path.exists(self.OICR_REF):
+            self.reference = self.OICR_REF
+        elif os.path.exists(self.LOCAL_REF):
+            self.reference = self.LOCAL_REF
+        else:
+            msg = "WARNING: Default reference file %s or %s not found" % \
+                  (self.OICR_REF, self.LOCAL_REF)
+            print(msg, file=sys.stderr)
+            self.reference = None
         self.n_as_mismatch = False
         self.verbose = False
         self.maxDiff = None # uncomment to show the (very long) full output diff
@@ -147,7 +158,10 @@ class test(unittest.TestCase):
         self.assertEqual(metrics_found, metrics_expected)
         # test empty FFQ/LFQ result from samtools stats; may occur for small input datasets
         # requires a fast_metric_finder object
-        fast_finder = fast_metric_finder(self.bam_path, self.reference, self.insert_max)
+        fast_finder = fast_metric_finder(self.bam_path,
+                                         self.reference,
+                                         self.insert_max,
+                                         self.n_as_mismatch)
         fq_result = fast_finder.fq_stats([])
         fq_expected = ({},{})
         self.assertEqual(fq_expected, fq_result)
