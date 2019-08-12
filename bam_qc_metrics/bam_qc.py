@@ -77,7 +77,8 @@ class bam_qc(base):
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
         fast_finder = fast_metric_finder(fast_finder_input_path,
                                          self.reference,
-                                         self.expected_insert_max)
+                                         self.expected_insert_max,
+                                         self.n_as_mismatch)
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
         # apply downsampling (if any)
         if self.sample_rate != None and self.sample_rate > 1:
@@ -307,10 +308,11 @@ class fast_metric_finder(base):
         'percentage of properly paired reads (%)'
     ])
     
-    def __init__(self, bam_path, reference, expected_insert_max):
+    def __init__(self, bam_path, reference, expected_insert_max, n_as_mismatch):
         self.bam_path = bam_path
         self.reference = reference
         self.expected_insert_max = expected_insert_max
+        self.n_as_mismatch = n_as_mismatch
         # map from SN field names to output keys
         self.sn_key_map = {
             'bases mapped (cigar)': 'bases mapped',
