@@ -385,13 +385,13 @@ class fast_metric_finder(base):
         mismatches = {}
         # find read using flags; unknown read is neither R1 nor R2
         if self.reference != None:
-            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+            r1_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
                                                           '-f', '64',
                                                           self.bam_path))
-            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+            r2_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
                                                           '-f', '128',
                                                           self.bam_path))
-            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+            ur_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
                                                           '-F', '192',
                                                           self.bam_path))
         else:
