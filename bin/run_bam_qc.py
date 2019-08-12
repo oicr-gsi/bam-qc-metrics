@@ -2,7 +2,7 @@
 
 """Main script to compute BAM QC metrics"""
 
-import argparse, os, sys, tempfile
+import argparse, os, re, sys, tempfile
 from bam_qc_metrics import bam_qc, version_reader
 
 DEFAULT_INSERT_MAX = 1500
@@ -86,7 +86,7 @@ def main():
                         'Only relevant if a reference is given with -r.')
     parser.add_argument('-o', '--out', metavar='PATH', default = '-',
                         help='Path for JSON output, or - for STDOUT. Defaults to STDOUT.')
-    parser.add_argument('-q', '--skip_below_mapq', metavar='QSCORE',
+    parser.add_argument('-q', '--skip-below-mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
     parser.add_argument('-r', '--reference', metavar='PATH',
                         help='Path to FASTA reference used to align the BAM file. Used to find '+\
@@ -117,18 +117,18 @@ def main():
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
     config = {
-        "bam": args.bam,
-        "target": args.target,
-        "insert max": insert_max,
-        "metadata": args.metadata,
-        "mark duplicates": args.mark_duplicates,
-        "n as mismatch": args.n_as_mismatch,
-        "skip below mapq": skip_below_mapq,
-        "reference": args.reference,
-        "sample rate": sample_rate,
-        "temp dir": args.temp_dir,
-        "verbose": args.verbose,
-        "workflow version": args.workflow_version
+        bam_qc.CONFIG_KEY_BAM: args.bam,
+        bam_qc.CONFIG_KEY_TARGET: args.target,
+        bam_qc.CONFIG_KEY_INSERT_MAX: insert_max,
+        bam_qc.CONFIG_KEY_METADATA: args.metadata,
+        bam_qc.CONFIG_KEY_MARK_DUPLICATES: args.mark_duplicates,
+        bam_qc.CONFIG_KEY_N_AS_MISMATCH: args.n_as_mismatch,
+        bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: skip_below_mapq,
+        bam_qc.CONFIG_KEY_REFERENCE: args.reference,
+        bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
+        bam_qc.CONFIG_KEY_TEMP_DIR: args.temp_dir,
+        bam_qc.CONFIG_KEY_VERBOSE: args.verbose,
+        bam_qc.CONFIG_KEY_WORKFLOW_VERSION: args.workflow_version
     }
     qc = bam_qc(config)
     qc.write_output(args.out)

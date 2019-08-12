@@ -70,6 +70,7 @@ class bam_qc(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
+        self.verbose = config[self.CONFIG_KEY_VERBOSE] # set this first; enables warnings
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
@@ -78,7 +79,6 @@ class bam_qc(base):
         self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
         self.target_path = config[self.CONFIG_KEY_TARGET]
-        self.verbose = config[self.CONFIG_KEY_VERBOSE]
         self.workflow_version = config[self.CONFIG_KEY_WORKFLOW_VERSION]
         # define other instance variables
         self.fast_metrics = None
@@ -93,7 +93,8 @@ class bam_qc(base):
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
         fast_finder = fast_metric_finder(fast_finder_input_path,
                                          self.reference,
-                                         self.expected_insert_max)
+                                         self.expected_insert_max,
+                                         self.n_as_mismatch)
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
         # apply downsampling (if any)
         if self.sample_rate != None and self.sample_rate > 1:
@@ -305,9 +306,13 @@ class bam_qc(base):
         ])
         found = set(config.keys())
         if not expected == found:
+            not_found_set = expected - found
+            not_found = not_found_set if len(not_found_set) > 0 else None
+            not_expected_set = found - expected
+            not_expected = not_expected_set if len(not_expected_set) > 0 else None
             msg = "Config fields are not valid\n"
-            msg = msg+"Fields expected and not found: "+str(expected - found)+"\n"
-            msg = msg+"Fields found and not expected: "+str(found - expected)+"\n"
+            msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
+            msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
             raise ValueError(msg)
 
 class fast_metric_finder(base):
@@ -326,10 +331,11 @@ class fast_metric_finder(base):
         'percentage of properly paired reads (%)'
     ])
     
-    def __init__(self, bam_path, reference, expected_insert_max):
+    def __init__(self, bam_path, reference, expected_insert_max, n_as_mismatch):
         self.bam_path = bam_path
         self.reference = reference
         self.expected_insert_max = expected_insert_max
+        self.n_as_mismatch = n_as_mismatch
         # map from SN field names to output keys
         self.sn_key_map = {
             'bases mapped (cigar)': 'bases mapped',
@@ -404,13 +410,13 @@ class fast_metric_finder(base):
         mismatches = {}
         # find read using flags; unknown read is neither R1 nor R2
         if self.reference != None:
-            r1_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+            r1_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
                                                           '-f', '64',
                                                           self.bam_path))
-            r2_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+            r2_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
                                                           '-f', '128',
                                                           self.bam_path))
-            ur_mismatch = self.parse_mismatch(pysam.stats('-r', reference,
+            ur_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
                                                           '-F', '192',
                                                           self.bam_path))
         else:
