@@ -67,6 +67,12 @@ def validate_args(args):
         valid = valid and validate_output_dir(parent_path)
     if args.temp_dir != None:
         valid = valid and validate_output_dir(args.temp_dir)
+    if args.workflow_version != None:
+        # version string should be of the form 0.12.34 or (for instance) 0.12.34_alpha
+        pattern = '^[0-9]+\.[0-9]+\.[0-9]+\w*$'
+        if not re.match(pattern, args.workflow_version):
+            sys.stderr.write("ERROR: Workflow version does not match pattern "+pattern+"\n")
+            valid = False
     return valid
 
 def main():

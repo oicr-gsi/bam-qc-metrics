@@ -35,7 +35,7 @@ class test(unittest.TestCase):
             self.reference = None
         self.n_as_mismatch = False
         self.verbose = False
-        self.workflow_version = "TEST"
+        self.workflow_version = "0.0.0_TEST"
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, out_path):
