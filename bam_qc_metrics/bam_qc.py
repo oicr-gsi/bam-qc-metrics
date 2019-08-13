@@ -17,14 +17,6 @@ class base:
     MAX_READ_LENGTH_KEY = 'max_read_length'
     UNMAPPED_READS_KEY = 'unmapped reads'
 
-
-class version_reader(base):
-
-    def print_package_version(self):
-        # read_package_version() is defined in __init__.py
-        print("bam-qc-metrics: Package version", bam_qc_metrics.read_package_version())
-
-
 class bam_qc(base):
 
     CONFIG_KEY_BAM = 'bam'
