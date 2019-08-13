@@ -8,6 +8,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 
 | Name                            | Former name             | Source                  | DS |
 | --------------------------------|-------------------------|-------------------------|----|
+| alignment reference             |                         | input parameter         | N  |
 | average read length             |                         | samtools stats: RL      | N  |
 | barcode                         |                         | metadata                | N  |
 | bases mapped                    | aligned bases           | samtools stats: SN      | N  |
@@ -26,6 +27,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | mismatched bases                | mismatch bases          | samtools stats: SN      | N  |
 | non primary reads               |                         | samtools stats: SN      | N  |
 | number of targets               |                         | bedtools                | N  |
+| package version                 |                         | package version file    | N  |
 | paired end                      | number of ends          | samtools stats: SN      | N  |
 | paired reads                    |                         | samtools stats: SN      | N  |
 | pairsMappedAbnormallyFar        |                         | insert size histogram   | Y  |
@@ -75,6 +77,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | total reads                     |                         | samtools stats: SN      | N  |
 | total target size               | target size             | bedtools                | N  |
 | unmapped reads                  |                         | samtools stats: SN      | N  |
+| workflow version                |                         | input parameter         | N  |
 
 - The DS column indicates which metrics are affected by downsampling (if any).
 
