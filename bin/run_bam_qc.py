@@ -3,7 +3,7 @@
 """Main script to compute BAM QC metrics"""
 
 import argparse, os, re, sys, tempfile
-from bam_qc_metrics import bam_qc, version_reader
+from bam_qc_metrics import bam_qc, read_package_version
 
 DEFAULT_INSERT_MAX = 1500
 
@@ -69,7 +69,7 @@ def validate_args(args):
         valid = valid and validate_output_dir(args.temp_dir)
     if args.workflow_version != None:
         # version string should be of the form 0.12.34 or (for instance) 0.12.34_alpha
-        pattern = '^[0-9]+\.[0-9]+\.[0-9]+\w*$'
+        pattern = r'^[0-9]+\.[0-9]+\.[0-9]+\w*$'
         if not re.match(pattern, args.workflow_version):
             sys.stderr.write("ERROR: Workflow version does not match pattern "+pattern+"\n")
             valid = False
@@ -78,7 +78,7 @@ def validate_args(args):
 def main():
     parser = argparse.ArgumentParser(description='QC for BAM files.')
     # --bam does not have required=True, so that --version works properly
-    parser.add_argument('-b', '--bam', metavar='PATH',
+    parser.add_argument('-b', '--bam', metavar='PATH', required=True,
                         help='Path to input BAM file. Required.')
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
                         help='Path to text file output by Picard MarkDuplicates. Optional.')
@@ -90,8 +90,8 @@ def main():
     parser.add_argument('-n', '--n-as-mismatch', action='store_true',
                         help='Record N calls as mismatches in mismatch-per-cycle counts. '+\
                         'Only relevant if a reference is given with -r.')
-    parser.add_argument('-o', '--out', metavar='PATH', default = '-',
-                        help='Path for JSON output, or - for STDOUT. Defaults to STDOUT.')
+    parser.add_argument('-o', '--out', metavar='PATH', required=True,
+                        help='Path for JSON output, or - for STDOUT. Required.')
     parser.add_argument('-q', '--skip-below-mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
     parser.add_argument('-r', '--reference', metavar='PATH',
@@ -104,20 +104,16 @@ def main():
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
     parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to %s (the current system tempdir).' % tempfile.gettempdir())
-    parser.add_argument('-v', '--version', action='store_true',
+    parser.add_argument('-v', '--version', action='version',
+                        version=read_package_version(),
                         help='Print the version number of bam-qc-metrics and exit')
     parser.add_argument('-V', '--verbose', action='store_true', help='Print additional messages to STDERR')
     parser.add_argument('-w', '--workflow-version', metavar='VERSION',
                         help='Version of the workflow being used to run bam-qc-metrics. '+\
                         'Optional. If given, will be recorded in JSON output.')
     args = parser.parse_args()
-    for_help = "For usage, run with -h or --help"
-    if args.version:
-        version_reader().print_package_version()
-        print(for_help)
-        exit(0)
-    elif not validate_args(args):
-        print(for_help)
+    if not validate_args(args):
+        print("For usage, run with -h or --help")
         exit(1)
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
