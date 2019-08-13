@@ -16,6 +16,33 @@ class base:
     READ_2_LENGTH_KEY = 'read 2'
     MAX_READ_LENGTH_KEY = 'max_read_length'
     UNMAPPED_READS_KEY = 'unmapped reads'
+    PACKAGE_VERSION_KEY = 'package version'
+
+
+class version_updater(base):
+
+    def __init__(self, data_dir=None, version=None):
+
+        if version==None:
+            self.package_version = bam_qc_metrics.read_package_version()
+        else:
+            self.package_version = version
+        if data_dir == None:
+            self.data_dir = bam_qc_metrics.get_data_dir_path()
+        else:
+            self.data_dir = data_dir
+
+    def update_files(self):
+        filenames = ['expected.json', 'expected_downsampled.json']
+        for name in filenames:
+            json_path = os.path.join(self.data_dir, name)
+            with open(json_path) as f:
+                data = json.loads(f.read())
+            data[self.PACKAGE_VERSION_KEY] = self.package_version
+            out = open(json_path, 'w')
+            out.write(json.dumps(data, sort_keys=True, indent=4))
+            out.close()
+
 
 class bam_qc(base):
 
@@ -263,7 +290,7 @@ class bam_qc(base):
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq
         output['qual fail reads'] = self.qual_fail_reads
-        output['package version'] = self.package_version
+        output[self.PACKAGE_VERSION_KEY] = self.package_version
         output['sample rate'] = self.sample_rate
         output['target file'] = os.path.split(self.target_path)[-1]
         output['workflow version'] = self.workflow_version

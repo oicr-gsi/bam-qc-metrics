@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 
-import json, os, subprocess, sys, tempfile, unittest
+import json, os, shutil, subprocess, sys, tempfile, unittest
 
-from bam_qc_metrics import bam_qc, fast_metric_finder
+from bam_qc_metrics import bam_qc, fast_metric_finder, get_data_dir_path, version_updater
 
 class test(unittest.TestCase):
 
@@ -35,7 +35,8 @@ class test(unittest.TestCase):
             self.reference = None
         self.n_as_mismatch = False
         self.verbose = False
-        self.workflow_version = "0.0.0_TEST"
+        self.dummy_version = "0.0.0_TEST"
+        self.workflow_version = self.dummy_version
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, out_path):
@@ -203,10 +204,25 @@ class test(unittest.TestCase):
             print("STANDARD ERROR:", result.stderr, file=sys.stderr)
             raise
         self.assert_default_output_ok(out_path)
+
+    def test_version_updater(self):
+        # 'update' copies of the test files with a dummy package version
+        # then check the dummy version has been written correctly
+        data_dir = get_data_dir_path()
+        filenames = ['expected.json', 'expected_downsampled.json']
+        temp_paths = []
+        for name in filenames:
+            dest = os.path.join(self.tmpdir, name)
+            temp_paths.append(dest)
+            shutil.copyfile(os.path.join(data_dir, name), dest)
+        updater = version_updater(self.tmpdir, self.dummy_version)
+        updater.update_files()
+        for temp_path in temp_paths:
+            with (open(temp_path)) as f: data = json.loads(f.read())
+            self.assertEqual(data[updater.PACKAGE_VERSION_KEY], self.dummy_version)
         
     def tearDown(self):
         self.tmp.cleanup()
-
 
 if __name__ == '__main__':
     unittest.main()
