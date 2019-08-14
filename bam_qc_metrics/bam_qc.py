@@ -2,7 +2,7 @@
 
 """Main class to compute BAM QC metrics"""
 
-import csv, json, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics, csv, json, os, re, pybedtools, pysam, sys, tempfile
 
 class base:
 
@@ -16,6 +16,32 @@ class base:
     READ_2_LENGTH_KEY = 'read 2'
     MAX_READ_LENGTH_KEY = 'max_read_length'
     UNMAPPED_READS_KEY = 'unmapped reads'
+    PACKAGE_VERSION_KEY = 'package version'
+
+
+class version_updater(base):
+
+    def __init__(self, data_dir=None, version=None):
+        if data_dir == None:
+            self.data_dir = bam_qc_metrics.get_data_dir_path()
+        else:
+            self.data_dir = data_dir
+        if version==None:
+            self.package_version = bam_qc_metrics.read_package_version()
+        else:
+            self.package_version = version
+
+    def update_files(self):
+        filenames = ['expected.json', 'expected_downsampled.json']
+        for name in filenames:
+            json_path = os.path.join(self.data_dir, name)
+            with open(json_path) as f:
+                data = json.loads(f.read())
+            data[self.PACKAGE_VERSION_KEY] = self.package_version
+            out = open(json_path, 'w')
+            out.write(json.dumps(data, sort_keys=True, indent=4))
+            out.close()
+
 
 class bam_qc(base):
 
@@ -30,6 +56,7 @@ class bam_qc(base):
     CONFIG_KEY_TARGET = 'target'
     CONFIG_KEY_TEMP_DIR = 'temp dir'
     CONFIG_KEY_VERBOSE = 'verbose'
+    CONFIG_KEY_WORKFLOW_VERSION = 'workflow version'
     DEFAULT_MARK_DUPLICATES_METRICS =  {
         "ESTIMATED_LIBRARY_SIZE": None,
         "HISTOGRAM": {},
@@ -65,8 +92,10 @@ class bam_qc(base):
         self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
         self.target_path = config[self.CONFIG_KEY_TARGET]
+        self.workflow_version = config[self.CONFIG_KEY_WORKFLOW_VERSION]
         # define other instance variables
         self.fast_metrics = None
+        self.package_version = bam_qc_metrics.read_package_version()
         self.qual_fail_reads = None
         self.slow_metrics = None
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
@@ -260,8 +289,10 @@ class bam_qc(base):
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq
         output['qual fail reads'] = self.qual_fail_reads
+        output[self.PACKAGE_VERSION_KEY] = self.package_version
         output['sample rate'] = self.sample_rate
         output['target file'] = os.path.split(self.target_path)[-1]
+        output['workflow version'] = self.workflow_version
         if out_path != '-':
             out_file = open(out_path, 'w')
         else:
@@ -283,13 +314,18 @@ class bam_qc(base):
             self.CONFIG_KEY_SKIP_BELOW_MAPQ,
             self.CONFIG_KEY_TARGET,
             self.CONFIG_KEY_TEMP_DIR,
-            self.CONFIG_KEY_VERBOSE
+            self.CONFIG_KEY_VERBOSE,
+            self.CONFIG_KEY_WORKFLOW_VERSION
         ])
         found = set(config.keys())
         if not expected == found:
+            not_found_set = expected - found
+            not_found = not_found_set if len(not_found_set) > 0 else None
+            not_expected_set = found - expected
+            not_expected = not_expected_set if len(not_expected_set) > 0 else None
             msg = "Config fields are not valid\n"
-            msg = msg+"Fields expected and not found: "+str(expected - found)+"\n"
-            msg = msg+"Fields found and not expected: "+str(found - expected)+"\n"
+            msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
+            msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
             raise ValueError(msg)
 
 class fast_metric_finder(base):

@@ -10,6 +10,8 @@ Fixed:
 
 Added:
 - GP-2038 Report software versions in JSON
+- Package version is read from the VERSION file
+- Specify workflow version using the '-w' option for `run_bam_qc.py`
 
 Changed:
 - GP-2040 refactoring
