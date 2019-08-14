@@ -5,13 +5,17 @@ Unreleased
 ----------
 
 Fixed:
+- GP-2035 More efficient finding unmapped reads
 - GP-2036 Failure to skip BED file headers
 - GP-2037 Count mismatches using MD tag, not CIGAR string
+- GP-2042 Correct reads per start point calculation
 
 Added:
 - GP-2038 Report software versions in JSON
 - Package version is read from the VERSION file
 - Specify workflow version using the '-w' option for `run_bam_qc.py`
+- Convenience script `update_test_data_version.py` to update package version in test data
+- GP-2045 Additional bedtools metrics
 
 Changed:
 - GP-2040 refactoring
