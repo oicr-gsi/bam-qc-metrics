@@ -22,15 +22,14 @@ class base:
 class version_updater(base):
 
     def __init__(self, data_dir=None, version=None):
-
-        if version==None:
-            self.package_version = bam_qc_metrics.read_package_version()
-        else:
-            self.package_version = version
         if data_dir == None:
             self.data_dir = bam_qc_metrics.get_data_dir_path()
         else:
             self.data_dir = data_dir
+        if version==None:
+            self.package_version = bam_qc_metrics.read_package_version()
+        else:
+            self.package_version = version
 
     def update_files(self):
         filenames = ['expected.json', 'expected_downsampled.json']

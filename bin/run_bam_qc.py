@@ -77,7 +77,6 @@ def validate_args(args):
 
 def main():
     parser = argparse.ArgumentParser(description='QC for BAM files.')
-    # --bam does not have required=True, so that --version works properly
     parser.add_argument('-b', '--bam', metavar='PATH', required=True,
                         help='Path to input BAM file. Required.')
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
