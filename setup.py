@@ -2,11 +2,15 @@
 Setup script for bam-qc-metrics
 """
 
+import os
 from setuptools import setup
+
+with open(os.path.join(os.path.dirname(__file__), 'VERSION')) as version_file:
+    package_version = version_file.read().strip()
 
 setup(
     name="bam-qc-metrics",
-    version="0.1.4",
+    version=package_version,
     scripts=['bin/run_bam_qc.py', ],
     packages=['bam_qc_metrics'],
     install_requires=['attrs', 'jsonschema', 'pybedtools', 'pyrsistent', 'pysam', 'six'],

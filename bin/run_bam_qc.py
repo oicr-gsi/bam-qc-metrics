@@ -2,8 +2,8 @@
 
 """Main script to compute BAM QC metrics"""
 
-import argparse, os, sys
-from bam_qc_metrics import bam_qc
+import argparse, os, re, sys, tempfile
+from bam_qc_metrics import bam_qc, read_package_version
 
 DEFAULT_INSERT_MAX = 1500
 
@@ -55,6 +55,9 @@ def validate_args(args):
         valid = valid and validate_positive_integer(args.insert_max, 'Max insert size')
     if args.sample_rate != None:
         valid = valid and validate_positive_integer(args.sample_rate, 'Downsampling rate')
+    if args.bam == None:
+        valid = False
+        sys.stderr.write("ERROR: -b/--bam argument is required\n")
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates, args.reference):
         if path_arg != None:
             valid = valid and validate_input_file(path_arg)
@@ -64,6 +67,12 @@ def validate_args(args):
         valid = valid and validate_output_dir(parent_path)
     if args.temp_dir != None:
         valid = valid and validate_output_dir(args.temp_dir)
+    if args.workflow_version != None:
+        # version string should be of the form 0.12.34 or (for instance) 0.12.34_alpha
+        pattern = r'^[0-9]+\.[0-9]+\.[0-9]+\w*$'
+        if not re.match(pattern, args.workflow_version):
+            sys.stderr.write("ERROR: Workflow version does not match pattern "+pattern+"\n")
+            valid = False
     return valid
 
 def main():
@@ -93,10 +102,18 @@ def main():
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional; if given, must be sorted in same order as BAM file.')
-    parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to /tmp')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Print additional messages to STDERR')
+    parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to %s (the current system tempdir).' % tempfile.gettempdir())
+    parser.add_argument('-v', '--version', action='version',
+                        version=read_package_version(),
+                        help='Print the version number of bam-qc-metrics and exit')
+    parser.add_argument('-V', '--verbose', action='store_true', help='Print additional messages to STDERR')
+    parser.add_argument('-w', '--workflow-version', metavar='VERSION',
+                        help='Version of the workflow being used to run bam-qc-metrics. '+\
+                        'Optional. If given, will be recorded in JSON output.')
     args = parser.parse_args()
-    if not validate_args(args): exit(1)
+    if not validate_args(args):
+        print("For usage, run with -h or --help")
+        exit(1)
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
@@ -111,7 +128,8 @@ def main():
         bam_qc.CONFIG_KEY_REFERENCE: args.reference,
         bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
         bam_qc.CONFIG_KEY_TEMP_DIR: args.temp_dir,
-        bam_qc.CONFIG_KEY_VERBOSE: args.verbose
+        bam_qc.CONFIG_KEY_VERBOSE: args.verbose,
+        bam_qc.CONFIG_KEY_WORKFLOW_VERSION: args.workflow_version
     }
     qc = bam_qc(config)
     qc.write_output(args.out)

@@ -1,8 +1,8 @@
 #! /usr/bin/env python3
 
-import json, os, subprocess, sys, tempfile, unittest
+import json, os, shutil, subprocess, sys, tempfile, unittest
 
-from bam_qc_metrics import bam_qc, fast_metric_finder
+from bam_qc_metrics import bam_qc, fast_metric_finder, get_data_dir_path, version_updater
 
 class test(unittest.TestCase):
 
@@ -35,6 +35,8 @@ class test(unittest.TestCase):
             self.reference = None
         self.n_as_mismatch = False
         self.verbose = False
+        self.dummy_version = "0.0.0_TEST"
+        self.workflow_version = self.dummy_version
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, out_path):
@@ -75,7 +77,8 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
-            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
         }
         qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out.json')
@@ -96,7 +99,8 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
-            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
         }
         qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
@@ -142,7 +146,8 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
-            bam_qc.CONFIG_KEY_VERBOSE: self.verbose
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
         }
         qc = bam_qc(config)
         # for low-coverage runs, ESTIMATED_LIBRARY_SIZE value is missing from mark duplicates text
@@ -185,6 +190,7 @@ class test(unittest.TestCase):
             '--skip-below-mapq', str(self.quality),
             '--reference', self.reference,
             '--temp-dir', self.tmpdir,
+            '--workflow-version', self.workflow_version
         ]
         if self.n_as_mismatch:
             args.append('--n-as-mismatch')
@@ -193,15 +199,30 @@ class test(unittest.TestCase):
         result = subprocess.run(args)
         try:
             result.check_returncode()
-        except CalledProcessError:
-            print("STANDARD OUTPUT: ", result.stdout, file=sys.stderr)
-            print("STANDARD ERROR: ", result.stderr, file=sys.stderr)
+        except subprocess.CalledProcessError:
+            print("STANDARD OUTPUT:", result.stdout, file=sys.stderr)
+            print("STANDARD ERROR:", result.stderr, file=sys.stderr)
             raise
         self.assert_default_output_ok(out_path)
+
+    def test_version_updater(self):
+        # 'update' copies of the test files with a dummy package version
+        # then check the dummy version has been written correctly
+        data_dir = get_data_dir_path()
+        filenames = ['expected.json', 'expected_downsampled.json']
+        temp_paths = []
+        for name in filenames:
+            dest = os.path.join(self.tmpdir, name)
+            temp_paths.append(dest)
+            shutil.copyfile(os.path.join(data_dir, name), dest)
+        updater = version_updater(self.tmpdir, self.dummy_version)
+        updater.update_files()
+        for temp_path in temp_paths:
+            with (open(temp_path)) as f: data = json.loads(f.read())
+            self.assertEqual(data[updater.PACKAGE_VERSION_KEY], self.dummy_version)
         
     def tearDown(self):
         self.tmp.cleanup()
-
 
 if __name__ == '__main__':
     unittest.main()
