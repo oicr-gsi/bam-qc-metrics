@@ -642,6 +642,9 @@ class slow_metric_finder(base):
         metrics['number of targets'] = targetBedTool.count()
         metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
         metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+        # placeholders; TODO implement these metrics
+        metrics['total coverage'] = None
+        metrics['coverage per target'] = None
         # TODO add bedtools coverage metrics?
         #coverage = targetBedTool.coverage(self.bam_path)
         #print(coverage)
