@@ -116,3 +116,5 @@ If quality filtering is in effect, the `unmapped reads` metric is computed only 
 The `mismatched bases` field may not be consistent with the mismatch-by-cycle fields for each read.
 
 The former is derived from `samtools stats SN`; the latter from `samtools stats MPC` with a given alignment reference.
+
+Note also that `samtools stats MPC` reports a number of cycles 1 greater than the actual number in the BAM file. For example, a 101-base read will have an entry for cycle 102 with zero mismatches. This value is retained in JSON output for consistency with the samtools results.
