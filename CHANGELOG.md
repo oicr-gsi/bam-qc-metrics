@@ -7,6 +7,12 @@ Unreleased
 Added:
 - GP-2045 Implementation of additional bedtools metrics
 
+v0.1.6: 2019-08-16
+------------------
+
+Fixed:
+- Bugfix: `setup.py` now copies the VERSION file to the installation directory
+
 v0.1.5: 2019-08-16
 ------------------
 
