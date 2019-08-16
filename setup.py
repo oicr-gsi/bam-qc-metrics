@@ -14,6 +14,7 @@ setup(
     scripts=['bin/run_bam_qc.py', ],
     packages=['bam_qc_metrics'],
     install_requires=['attrs', 'jsonschema', 'pybedtools', 'pyrsistent', 'pysam', 'six'],
+    data_files=[('', ['VERSION'])],
     python_requires='>=3.5',
     author="Iain Bancarz",
     author_email="ibancarz@oicr.on.ca",
