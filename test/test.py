@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 
-import json, os, shutil, subprocess, sys, tempfile, unittest
+import json, os, re, shutil, subprocess, sys, tempfile, unittest
 
 from bam_qc_metrics import bam_qc, fast_metric_finder, get_data_dir_path, version_updater
 
@@ -61,8 +61,13 @@ class test(unittest.TestCase):
                 print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
                       file=sys.stderr)
                 raise
-        # now check all output data
+        # reference path output depends on local filesystem
+        # make test portable by just checking the filename
+        self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
+        # now check all output data (aside from the reference path)
         with (open(self.expected_path)) as f: expected = json.loads(f.read())
+        del output['alignment reference']
+        del expected['alignment reference']
         self.assertEqual(output, expected)
 
     def test_default_analysis(self):
@@ -126,8 +131,13 @@ class test(unittest.TestCase):
                 print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
                       file=sys.stderr)
                 raise
-        # now check all output data
+        # reference path output depends on local filesystem
+        # make test portable by just checking the filename
+        self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
+        # now check all output data (aside from the reference)
         with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
+        del expected['alignment reference']
+        del output['alignment reference']
         self.assertEqual(output, expected)
         qc.cleanup()
 
