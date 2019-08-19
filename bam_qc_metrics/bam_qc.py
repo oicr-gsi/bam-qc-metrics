@@ -2,9 +2,9 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, sys, tempfile
 
-class base:
+class base(object):
 
     """
     Class for shared constants
@@ -85,6 +85,7 @@ class bam_qc(base):
         # read instance variables from config
         self.verbose = config[self.CONFIG_KEY_VERBOSE] # set this first; enables warnings
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
+        self.logger = self.configure_logger()
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
         self.n_as_mismatch = config[self.CONFIG_KEY_N_AS_MISMATCH]
@@ -162,6 +163,18 @@ class bam_qc(base):
             sys.stderr.write("Omitting cleanup for user-specified "+\
                              "temporary directory %s\n" % self.tmpdir)
 
+    def configure_logger(self):
+        logger = logging.getLogger(type(self).__name__)
+        logger.setLevel(getattr(logging, 'INFO'))
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s',
+                                      datefmt='%Y-%m-%d_%H:%M:%S')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+        logger.info("Hello logging!")
+        return logger
+            
     def generate_downsampled_bam(self, bam_path, sample_rate):
         """
         Write a temporary downsampled BAM file
