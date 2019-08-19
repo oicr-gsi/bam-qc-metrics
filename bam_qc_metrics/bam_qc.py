@@ -102,27 +102,34 @@ class bam_qc(base):
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
         self.unmapped_excluded_reads = None
         # apply quality filter (if any); get input path for downsampling
+        self.logger.info("Started bam_qc processing.")
         result = self.apply_mapq_filter(config[self.CONFIG_KEY_BAM])
         (fast_finder_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
+        self.logger.info("Started computing fast bam_qc metrics.")
         fast_finder = fast_metric_finder(fast_finder_input_path,
                                          self.reference,
                                          self.expected_insert_max,
                                          self.n_as_mismatch)
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
+        self.logger.info("Finished computing fast bam_qc metrics.")
         # apply downsampling (if any)
         if self.sample_rate != None and self.sample_rate > 1:
             slow_finder_input_path = self.generate_downsampled_bam(fast_finder_input_path,
                                                                    self.sample_rate)
         else:
+            self.logger.info("Downsampling is not in effect")
             self.sample_rate = 1
             slow_finder_input_path = fast_finder_input_path
         # find 'slow' metrics on (maybe) downsampled dataset
+        self.logger.info("Started computing slow bam_qc metrics.")
         slow_finder = slow_metric_finder(slow_finder_input_path,
                                          self.target_path,
                                          fast_finder.read_length_summary(),
                                          self.verbose)
         self.slow_metrics = slow_finder.metrics
+        self.logger.info("Finished computing slow bam_qc metrics.")
+        self.logger.info("Finished computing all bam_qc metrics.")
 
     def apply_mapq_filter(self, bam_path):
         """
@@ -133,6 +140,7 @@ class bam_qc(base):
         if self.mapq_filter_is_active():
             excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
             included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
+            self.logger.info("Started filtering input BAM file by mapping quality.")
             pysam.view(bam_path,
                        '-b',
                        '-q', str(self.skip_below_mapq),
@@ -145,7 +153,9 @@ class bam_qc(base):
             unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
             total_unmapped_and_excluded = int(unmapped_raw.strip())
             filtered_bam_path = included_by_mapq_path
+            self.logger.info("Finished filtering input BAM file by mapping quality.")
         else:
+            self.logger.info("Mapping quality filter is not in effect")
             total_failed_reads = 0
             total_unmapped_and_excluded = 0
             filtered_bam_path = bam_path
@@ -165,6 +175,7 @@ class bam_qc(base):
 
     def configure_logger(self):
         logger = logging.getLogger(type(self).__name__)
+        # TODO set level based on verbose/debug switches
         logger.setLevel(getattr(logging, 'INFO'))
         ch = logging.StreamHandler()
         ch.setLevel(logging.DEBUG)
@@ -172,7 +183,6 @@ class bam_qc(base):
                                       datefmt='%Y-%m-%d_%H:%M:%S')
         ch.setFormatter(formatter)
         logger.addHandler(ch)
-        logger.info("Hello logging!")
         return logger
             
     def generate_downsampled_bam(self, bam_path, sample_rate):
@@ -181,23 +191,28 @@ class bam_qc(base):
         """
         downsampled_path = None
         if sample_rate == 1:
-            if self.verbose: sys.stderr.write("Sample rate = 1, omitting down sampling\n")
+            self.logger.info("Sample rate = 1, omitting down sampling")
             downsampled_path = bam_path
         elif sample_rate < 1:
-            raise ValueError("Sample rate cannot be less than 1")
+            msg = "Sample rate cannot be less than 1"
+            self.logger.error(msg)
+            raise ValueError(msg)
         else:
             # We are sampling every Nth read
             # Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
             # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
+            self.logger.info("Starting downsampling with sample rate %i", sample_rate)
             downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
             sample_decimal = round(1.0/sample_rate, self.FINE_PRECISION)
             sample_arg = str(self.RANDOM_SEED + sample_decimal)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
             # TODO Report random seed in JSON output?
+            self.logger.info("Finished downsampling with sample rate %i", sample_rate)
             sampled = int(pysam.view('-c', downsampled_path).strip())
+            self.logger.info("%i reads in downsampled set", sampled)
             if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
-                sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
+                self.logger.warn("WARNING: Only %i reads remain after downsampling", sampled)
         return downsampled_path
 
     def mapq_filter_is_active(self):
