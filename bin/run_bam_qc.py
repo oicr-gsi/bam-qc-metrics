@@ -101,8 +101,10 @@ def main():
                         help='Sample every Nth read, where N is the argument. Optional, defaults to 1 (no sampling).')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
-                        'against. Optional; if given, must be sorted in same order as BAM file.')
-    parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output files; optional, defaults to %s (the current system tempdir).' % tempfile.gettempdir())
+                        'against. Optional. If given, must be sorted in same order as BAM file. '+\
+                        'If not given, bedtools coverage metrics will be omitted.')
+    parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output '+\
+                        'files; optional, defaults to %s (the current system tempdir).' % tempfile.gettempdir())
     parser.add_argument('-v', '--version', action='version',
                         version=read_package_version(),
                         help='Print the version number of bam-qc-metrics and exit')

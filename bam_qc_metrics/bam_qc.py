@@ -32,7 +32,7 @@ class version_updater(base):
             self.package_version = version
 
     def update_files(self):
-        filenames = ['expected.json', 'expected_downsampled.json']
+        filenames = ['expected.json', 'expected_downsampled.json', 'expected_no_target.json']
         for name in filenames:
             json_path = os.path.join(self.data_dir, name)
             with open(json_path) as f:
@@ -119,7 +119,8 @@ class bam_qc(base):
         # find 'slow' metrics on (maybe) downsampled dataset
         slow_finder = slow_metric_finder(slow_finder_input_path,
                                          self.target_path,
-                                         fast_finder.read_length_summary())
+                                         fast_finder.read_length_summary(),
+                                         self.verbose)
         self.slow_metrics = slow_finder.metrics
 
     def apply_mapq_filter(self, bam_path):
@@ -291,7 +292,7 @@ class bam_qc(base):
         output['qual fail reads'] = self.qual_fail_reads
         output[self.PACKAGE_VERSION_KEY] = self.package_version
         output['sample rate'] = self.sample_rate
-        output['target file'] = os.path.split(self.target_path)[-1]
+        output['target file'] = os.path.split(self.target_path)[-1] if self.target_path else None
         output['workflow version'] = self.workflow_version
         if out_path != '-':
             out_file = open(out_path, 'w')
@@ -618,10 +619,11 @@ class slow_metric_finder(base):
     TOTAL_BY_CYCLE_KEY = 'total by cycle'
     QUALITY_HISTOGRAM_KEY = 'quality histogram'
 
-    def __init__(self, bam_path, target_path, read_lengths):
+    def __init__(self, bam_path, target_path, read_lengths, verbose=False):
         self.bam_path = bam_path
         self.target_path = target_path
         self.read_lengths = read_lengths
+        self.verbose = verbose
         self.metrics = self.evaluate_all_metrics()
 
     def evaluate_all_metrics(self):
@@ -637,11 +639,18 @@ class slow_metric_finder(base):
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
-        bamBedTool = pybedtools.BedTool(self.bam_path)
-        targetBedTool = pybedtools.BedTool(self.target_path)
-        metrics['number of targets'] = targetBedTool.count()
-        metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
-        metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+        if self.target_path:
+            bamBedTool = pybedtools.BedTool(self.bam_path)
+            targetBedTool = pybedtools.BedTool(self.target_path)
+            metrics['number of targets'] = targetBedTool.count()
+            metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
+            metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+        else:
+            if self.verbose:
+                print("No target path given, omitting bedtools metrics", file=sys.stderr)
+            metrics['number of targets'] = None
+            metrics['total target size'] = None
+            metrics['reads on target'] = None
         # placeholders; TODO implement these metrics
         metrics['total coverage'] = None
         metrics['coverage per target'] = None

@@ -22,6 +22,7 @@ class test(unittest.TestCase):
         self.markdup_path_low_cover = os.path.join(self.datadir, 'marked_dup_metrics_low_cover.txt')
         self.target_path = os.path.join(self.datadir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.datadir, 'expected.json')
+        self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         if os.path.exists(self.OICR_REF):
@@ -40,7 +41,6 @@ class test(unittest.TestCase):
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, out_path):
-        # default analysis parameters -- use for basic class and script tests
         with (open(out_path)) as f: output = json.loads(f.read())
         # do individual sanity checks on some variables
         # helps validate results if expected output JSON file has been changed
@@ -219,7 +219,7 @@ class test(unittest.TestCase):
         # 'update' copies of the test files with a dummy package version
         # then check the dummy version has been written correctly
         data_dir = get_data_dir_path()
-        filenames = ['expected.json', 'expected_downsampled.json']
+        filenames = ['expected.json', 'expected_downsampled.json', 'expected_no_target.json']
         temp_paths = []
         for name in filenames:
             dest = os.path.join(self.tmpdir, name)
@@ -230,7 +230,55 @@ class test(unittest.TestCase):
         for temp_path in temp_paths:
             with (open(temp_path)) as f: data = json.loads(f.read())
             self.assertEqual(data[updater.PACKAGE_VERSION_KEY], self.dummy_version)
-        
+
+    def test_without_target(self):
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_TARGET: None,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out.json')
+        qc.write_output(out_path)
+        with (open(out_path)) as f: output = json.loads(f.read())
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
+        expected_variables = {
+            "inserted bases": 315,
+            "reads per start point": 1.031,
+            "readsMissingMDtags": 80020,
+            "sample rate": 1,
+            "total reads": 80020,
+            "total target size": None,
+        }
+        for key in expected_variables.keys():
+            expected = expected_variables[key]
+            got = output[key]
+            try:
+                self.assertEqual(expected, got)
+            except AssertionError:
+                print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
+                      file=sys.stderr)
+                raise
+        # reference path output depends on local filesystem
+        # make test portable by just checking the filename
+        self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
+        # now check all output data (aside from the reference path)
+        with (open(self.expected_no_target)) as f: expected = json.loads(f.read())
+        del output['alignment reference']
+        del expected['alignment reference']
+        self.assertEqual(output, expected)
+        qc.cleanup()
+
     def tearDown(self):
         self.tmp.cleanup()
 
