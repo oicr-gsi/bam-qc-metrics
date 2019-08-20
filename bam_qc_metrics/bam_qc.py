@@ -176,9 +176,10 @@ class bam_qc(base):
     def configure_logger(self):
         logger = logging.getLogger(type(self).__name__)
         # TODO set level based on verbose/debug switches
-        logger.setLevel(getattr(logging, 'INFO'))
+        log_level = getattr(logging, 'DEBUG')
+        logger.setLevel(log_level)
         ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
+        ch.setLevel(log_level)
         formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s',
                                       datefmt='%Y-%m-%d_%H:%M:%S')
         ch.setFormatter(formatter)
@@ -205,6 +206,7 @@ class bam_qc(base):
             downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
             sample_decimal = round(1.0/sample_rate, self.FINE_PRECISION)
             sample_arg = str(self.RANDOM_SEED + sample_decimal)
+            self.logger.debug("Sampling argument to 'samtools view' is %s", sample_arg)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
             # TODO Report random seed in JSON output?
