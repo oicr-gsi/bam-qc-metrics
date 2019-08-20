@@ -148,10 +148,12 @@ class bam_qc(base):
                        '-U', excluded_by_mapq_path,
                        catch_stdout=False)
             total_failed_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
+            self.logger.info("Total reads failing mapq filter: %d", total_failed_reads)
             # unmapped reads will fail the mapping quality filter, by definition
             # so if the quality filter is applied, find unmapped total from the excluded reads
             unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
             total_unmapped_and_excluded = int(unmapped_raw.strip())
+            self.logger.debug("Total unmapped and excluded reads: %d", total_unmapped_and_excluded)
             filtered_bam_path = included_by_mapq_path
             self.logger.info("Finished filtering input BAM file by mapping quality.")
         else:
