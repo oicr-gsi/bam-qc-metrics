@@ -4,6 +4,9 @@ CHANGELOG
 Unreleased
 ----------
 
+Fixed:
+- GP-2055 Run without error if `--target` not given
+
 Added:
 - GP-2045 Implementation of additional bedtools metrics
 

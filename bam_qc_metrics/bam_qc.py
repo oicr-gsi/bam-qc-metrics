@@ -2,7 +2,7 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics, csv, json, logging, math, os, re, pybedtools, pysam, sys, tempfile
 
 class base(object):
 
@@ -204,12 +204,13 @@ class bam_qc(base):
             # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
             self.logger.info("Starting downsampling with sample rate %i", sample_rate)
             downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
-            sample_decimal = round(1.0/sample_rate, self.FINE_PRECISION)
+            x = 1.0/sample_rate
+            sf = 5 # significant figures for rounding the sample rate
+            sample_decimal = round(x, sf - int(math.floor(math.log10(x)))-1)
             sample_arg = str(self.RANDOM_SEED + sample_decimal)
             self.logger.debug("Sampling argument to 'samtools view' is %s", sample_arg)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
-            # TODO Report random seed in JSON output?
             self.logger.info("Finished downsampling with sample rate %i", sample_rate)
             sampled = int(pysam.view('-c', downsampled_path).strip())
             self.logger.info("%i reads in downsampled set", sampled)
