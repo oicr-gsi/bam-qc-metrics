@@ -35,6 +35,8 @@ class test(unittest.TestCase):
             print(msg, file=sys.stderr)
             self.reference = None
         self.n_as_mismatch = False
+        self.log_path = None
+        self.debug = False
         self.verbose = False
         self.dummy_version = "0.0.0_TEST"
         self.workflow_version = self.dummy_version
@@ -73,8 +75,10 @@ class test(unittest.TestCase):
     def test_default_analysis(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
@@ -95,8 +99,10 @@ class test(unittest.TestCase):
         sample_rate = 10
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
@@ -147,8 +153,10 @@ class test(unittest.TestCase):
         # - FFQ/LFQ in samtools stats
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
@@ -234,8 +242,10 @@ class test(unittest.TestCase):
     def test_without_target(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: None,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
