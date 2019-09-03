@@ -46,7 +46,9 @@ class version_updater(base):
 class bam_qc(base):
 
     CONFIG_KEY_BAM = 'bam'
+    CONFIG_KEY_DEBUG = 'debug'
     CONFIG_KEY_INSERT_MAX = 'insert max'
+    CONFIG_KEY_LOG = 'log path'
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
     CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
@@ -83,9 +85,10 @@ class bam_qc(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
-        self.verbose = config[self.CONFIG_KEY_VERBOSE] # set this first; enables warnings
+        self.debug = config[self.CONFIG_KEY_DEBUG] # enable logging first in case of warnings
+        self.verbose = config[self.CONFIG_KEY_VERBOSE]
+        self.logger = self.configure_logger(config[self.CONFIG_KEY_LOG])
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
-        self.logger = self.configure_logger()
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
         self.n_as_mismatch = config[self.CONFIG_KEY_N_AS_MISMATCH]
@@ -172,20 +175,28 @@ class bam_qc(base):
         if self.tmp_object != None:
             self.tmp_object.cleanup()
         elif self.verbose:
-            sys.stderr.write("Omitting cleanup for user-specified "+\
+            self.logger.info("Omitting cleanup for user-specified "+\
                              "temporary directory %s\n" % self.tmpdir)
 
-    def configure_logger(self):
+    def configure_logger(self, log_path=None):
         logger = logging.getLogger(type(self).__name__)
-        # TODO set level based on verbose/debug switches
-        log_level = getattr(logging, 'DEBUG')
+        if self.debug:
+            log_level = getattr(logging, 'DEBUG')
+        elif self.verbose:
+            log_level = getattr(logging, 'INFO')
+        else:
+            log_level = getattr(logging, 'WARN')
         logger.setLevel(log_level)
-        ch = logging.StreamHandler()
-        ch.setLevel(log_level)
+        handler = None
+        if log_path==None:
+            handler = logging.StreamHandler()
+        else:
+            handler = logging.FileHandler(log_path)
+        handler.setLevel(log_level)
         formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s',
                                       datefmt='%Y-%m-%d_%H:%M:%S')
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
         return logger
             
     def generate_downsampled_bam(self, bam_path, sample_rate):
@@ -229,7 +240,7 @@ class bam_qc(base):
             with open(metadata_path) as f: raw_metadata = json.loads(f.read())
             metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
         else:
-            if self.verbose: sys.stderr.write("Metadata file not given, using empty defaults\n")
+            self.logger.info("Metadata file not given, using empty defaults")
             metadata = {key: None for key in self.METADATA_KEYS}
         return metadata
     
@@ -339,7 +350,9 @@ class bam_qc(base):
         """ Validate keys of the config dictionary for __init__ """
         expected = set([
             self.CONFIG_KEY_BAM,
+            self.CONFIG_KEY_DEBUG,
             self.CONFIG_KEY_INSERT_MAX,
+            self.CONFIG_KEY_LOG,
             self.CONFIG_KEY_MARK_DUPLICATES,
             self.CONFIG_KEY_METADATA,
             self.CONFIG_KEY_N_AS_MISMATCH,

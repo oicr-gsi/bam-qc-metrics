@@ -65,6 +65,9 @@ def validate_args(args):
         # ugly but robust Python idiom to resolve path of parent directory
         parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
         valid = valid and validate_output_dir(parent_path)
+    if args.log_path != None:
+        parent_path = os.path.abspath(os.path.join(args.log_path, os.pardir))
+        valid = valid and validate_output_dir(parent_path)
     if args.temp_dir != None:
         valid = valid and validate_output_dir(args.temp_dir)
     if args.workflow_version != None:
@@ -81,9 +84,13 @@ def main():
                         help='Path to input BAM file. Required.')
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
                         help='Path to text file output by Picard MarkDuplicates. Optional.')
+    parser.add_argument('-D', '--debug', action='store_true',
+                        help='Most verbose; write messages of priority DEBUG and higher to log')
     parser.add_argument('-i', '--insert-max', metavar='INT', default=DEFAULT_INSERT_MAX,
                         help='Maximum expected value for insert size; higher values will be '+\
                         'counted as abnormal. Optional; default = %i.' % DEFAULT_INSERT_MAX)
+    parser.add_argument('-l', '--log-path', metavar='PATH',
+                        help='Path of file where log output will be appended. Optional, defaults to STDERR.')
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-n', '--n-as-mismatch', action='store_true',
@@ -108,7 +115,8 @@ def main():
     parser.add_argument('-v', '--version', action='version',
                         version=read_package_version(),
                         help='Print the version number of bam-qc-metrics and exit')
-    parser.add_argument('-V', '--verbose', action='store_true', help='Print additional messages to STDERR')
+    parser.add_argument('-V', '--verbose', action='store_true',
+                        help='More verbose; write messages of priority INFO and higher to log')
     parser.add_argument('-w', '--workflow-version', metavar='VERSION',
                         help='Version of the workflow being used to run bam-qc-metrics. '+\
                         'Optional. If given, will be recorded in JSON output.')
@@ -121,8 +129,10 @@ def main():
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
     config = {
         bam_qc.CONFIG_KEY_BAM: args.bam,
+        bam_qc.CONFIG_KEY_DEBUG: args.debug,
         bam_qc.CONFIG_KEY_TARGET: args.target,
         bam_qc.CONFIG_KEY_INSERT_MAX: insert_max,
+        bam_qc.CONFIG_KEY_LOG: args.log_path,
         bam_qc.CONFIG_KEY_METADATA: args.metadata,
         bam_qc.CONFIG_KEY_MARK_DUPLICATES: args.mark_duplicates,
         bam_qc.CONFIG_KEY_N_AS_MISMATCH: args.n_as_mismatch,
