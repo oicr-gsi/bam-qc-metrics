@@ -231,6 +231,10 @@ class bam_qc(base):
             # Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
             # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
             self.logger.info("Starting downsampling with sample rate %i", sample_rate)
+            if self.random_seed == self.DEFAULT_RANDOM_SEED:
+                self.logger.info("Using default random seed %i", self.DEFAULT_RANDOM_SEED)
+            else:
+                self.logger.info("Using custom random seed %i", self.random_seed)
             downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
             x = 1.0/sample_rate
             sf = 5 # significant figures for rounding the sample rate
