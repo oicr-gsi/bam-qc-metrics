@@ -264,7 +264,10 @@ class test(unittest.TestCase):
         # 'update' copies of the test files with a dummy package version
         # then check the dummy version has been written correctly
         data_dir = get_data_dir_path()
-        filenames = ['expected.json', 'expected_downsampled.json', 'expected_no_target.json']
+        filenames = ['expected.json',
+                     'expected_downsampled.json',
+                     'expected_no_target.json',
+                     'expected_downsampled_rs88.json']
         temp_paths = []
         for name in filenames:
             dest = os.path.join(self.tmpdir, name)
