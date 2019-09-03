@@ -32,7 +32,10 @@ class version_updater(base):
             self.package_version = version
 
     def update_files(self):
-        filenames = ['expected.json', 'expected_downsampled.json', 'expected_no_target.json']
+        filenames = ['expected.json',
+                     'expected_downsampled.json',
+                     'expected_no_target.json',
+                     'expected_downsampled_rs88.json']
         for name in filenames:
             json_path = os.path.join(self.data_dir, name)
             with open(json_path) as f:
