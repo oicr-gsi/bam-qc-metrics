@@ -35,7 +35,7 @@ class test(unittest.TestCase):
             print(msg, file=sys.stderr)
             self.reference = None
         self.n_as_mismatch = False
-        self.log_path = None
+        self.log_path = os.path.join(self.tmpdir, 'test.log')
         self.debug = False
         self.verbose = False
         self.dummy_version = "0.0.0_TEST"
@@ -187,7 +187,8 @@ class test(unittest.TestCase):
         fast_finder = fast_metric_finder(self.bam_path,
                                          self.reference,
                                          self.insert_max,
-                                         self.n_as_mismatch)
+                                         self.n_as_mismatch,
+                                         qc.logger)
         fq_result = fast_finder.fq_stats([])
         fq_expected = ({},{})
         self.assertEqual(fq_expected, fq_result)
@@ -212,6 +213,8 @@ class test(unittest.TestCase):
         ]
         if self.n_as_mismatch:
             args.append('--n-as-mismatch')
+        if self.debug:
+            args.append('--debug')
         if self.verbose:
             args.append('--verbose')
         result = subprocess.run(args)
