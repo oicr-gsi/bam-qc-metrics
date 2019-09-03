@@ -2,7 +2,7 @@
 
 """Main script to compute BAM QC metrics"""
 
-import argparse, os, re, sys, tempfile
+import argparse, cProfile, os, re, sys, tempfile
 from bam_qc_metrics import bam_qc, read_package_version
 
 DEFAULT_INSERT_MAX = 1500
@@ -89,8 +89,8 @@ def main():
     parser.add_argument('-i', '--insert-max', metavar='INT', default=DEFAULT_INSERT_MAX,
                         help='Maximum expected value for insert size; higher values will be '+\
                         'counted as abnormal. Optional; default = %i.' % DEFAULT_INSERT_MAX)
-    parser.add_argument('-l', '--log-path', metavar='PATH',
-                        help='Path of file where log output will be appended. Optional, defaults to STDERR.')
+    parser.add_argument('-l', '--log-path', metavar='PATH', help='Path of file where log output '+\
+                        'will be appended. Optional, defaults to STDERR.')
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='Path to JSON file containing metadata. Optional.')
     parser.add_argument('-n', '--n-as-mismatch', action='store_true',
@@ -98,6 +98,9 @@ def main():
                         'Only relevant if a reference is given with -r.')
     parser.add_argument('-o', '--out', metavar='PATH', required=True,
                         help='Path for JSON output, or - for STDOUT. Required.')
+    parser.add_argument('-p', '--profile', action='store_true', help='Write runtime profile to '+\
+                        'STDOUT. For development use only. Should not be combined with writing '+\
+                        'JSON to STDOUT.')
     parser.add_argument('-q', '--skip-below-mapq', metavar='QSCORE',
                         help='Threshold to skip reads with low alignment quality. Optional.')
     parser.add_argument('-r', '--reference', metavar='PATH',
@@ -143,8 +146,16 @@ def main():
         bam_qc.CONFIG_KEY_VERBOSE: args.verbose,
         bam_qc.CONFIG_KEY_WORKFLOW_VERSION: args.workflow_version
     }
-    qc = bam_qc(config)
-    qc.write_output(args.out)
+    if args.profile:
+        # sort order = 2, sorts profile by cumulative time
+        cProfile.runctx('bam_qc(config).write_output(out_path)',
+                        {'bam_qc': bam_qc, 'config': config, 'out_path': args.out},
+                        {},
+                        None,
+                        2)
+    else:
+        qc = bam_qc(config)
+        qc.write_output(args.out)
 
 if __name__ == "__main__":
     main()
