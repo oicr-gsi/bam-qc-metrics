@@ -52,6 +52,7 @@ class bam_qc(base):
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
     CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
+    CONFIG_KEY_RANDOM_SEED = 'random_seed'
     CONFIG_KEY_REFERENCE = 'reference'
     CONFIG_KEY_SAMPLE_RATE = 'sample rate'
     CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
@@ -80,7 +81,7 @@ class bam_qc(base):
         'run name',
         'sample'
     ]
-    RANDOM_SEED = 42
+    DEFAULT_RANDOM_SEED = 42
 
     def __init__(self, config):
         self.validate_config_fields(config)
@@ -92,6 +93,8 @@ class bam_qc(base):
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
         self.n_as_mismatch = config[self.CONFIG_KEY_N_AS_MISMATCH]
+        seed = config[self.CONFIG_KEY_RANDOM_SEED]
+        self.random_seed = seed if seed != None else self.DEFAULT_RANDOM_SEED
         self.reference = config[self.CONFIG_KEY_REFERENCE]
         self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
@@ -229,7 +232,7 @@ class bam_qc(base):
             x = 1.0/sample_rate
             sf = 5 # significant figures for rounding the sample rate
             sample_decimal = round(x, sf - int(math.floor(math.log10(x)))-1)
-            sample_arg = str(self.RANDOM_SEED + sample_decimal)
+            sample_arg = str(self.random_seed + sample_decimal)
             self.logger.debug("Sampling argument to 'samtools view' is %s", sample_arg)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
@@ -372,6 +375,7 @@ class bam_qc(base):
             self.CONFIG_KEY_MARK_DUPLICATES,
             self.CONFIG_KEY_METADATA,
             self.CONFIG_KEY_N_AS_MISMATCH,
+            self.CONFIG_KEY_RANDOM_SEED,
             self.CONFIG_KEY_REFERENCE,
             self.CONFIG_KEY_SAMPLE_RATE,
             self.CONFIG_KEY_SKIP_BELOW_MAPQ,
@@ -389,7 +393,7 @@ class bam_qc(base):
             msg = "Config fields are not valid\n"
             msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
             msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
-            self.logger.error(msg)
+            # do not log this message; logger not yet initialized
             raise ValueError(msg)
 
 class fast_metric_finder(base):

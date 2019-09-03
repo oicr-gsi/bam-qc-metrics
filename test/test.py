@@ -24,6 +24,7 @@ class test(unittest.TestCase):
         self.expected_path = os.path.join(self.datadir, 'expected.json')
         self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
+        self.expected_path_rs88 = os.path.join(self.datadir, 'expected_downsampled_rs88.json')
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         if os.path.exists(self.OICR_REF):
             self.reference = self.OICR_REF
@@ -83,6 +84,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
@@ -107,6 +109,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
@@ -161,6 +164,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
@@ -192,6 +196,36 @@ class test(unittest.TestCase):
         fq_result = fast_finder.fq_stats([])
         fq_expected = ({},{})
         self.assertEqual(fq_expected, fq_result)
+        qc.cleanup()
+
+    def test_random_seed(self):
+        # test downsampling with a different random seed from the default
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: 88,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE_RATE: 10,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out_downsampled_88.json')
+        qc.write_output(out_path)
+        with (open(out_path)) as f: output = json.loads(f.read())
+        with (open(self.expected_path_rs88)) as f: expected = json.loads(f.read())
+        # do not test the alignment reference local path
+        del expected['alignment reference']
+        del output['alignment reference']
+        self.assertEqual(output, expected)
         qc.cleanup()
 
     def test_script(self):
@@ -253,6 +287,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
             bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,

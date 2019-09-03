@@ -107,14 +107,19 @@ def main():
                         help='Path to FASTA reference used to align the BAM file. Used to find '+\
                         'mismatches by cycle using samtools. Optional; if not supplied, '+\
                         'mismatches by cycle will be empty.')
+    parser.add_argument('-R', '--random-seed', metavar='INT', help='Set sampling random seed to '+\
+                        'INT. Has no effect if --sample-rate not specified. Optional; if not '+\
+                        'given, a default seed will be used.')
     parser.add_argument('-s', '--sample-rate', metavar='INT',
-                        help='Sample every Nth read, where N is the argument. Optional, defaults to 1 (no sampling).')
+                        help='Sample every Nth read, where N is the argument. Optional, '+\
+                        'defaults to 1 (no sampling).')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional. If given, must be sorted in same order as BAM file. '+\
                         'If not given, bedtools coverage metrics will be omitted.')
     parser.add_argument('-T', '--temp-dir', metavar='PATH', help='Directory for temporary output '+\
-                        'files; optional, defaults to %s (the current system tempdir).' % tempfile.gettempdir())
+                        'files; optional, defaults to %s (the current system tempdir).' \
+                        % tempfile.gettempdir())
     parser.add_argument('-v', '--version', action='version',
                         version=read_package_version(),
                         help='Print the version number of bam-qc-metrics and exit')
@@ -129,6 +134,7 @@ def main():
         exit(1)
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
+    random_seed = None if args.random_seed == None else int(args.random_seed)
     sample_rate = None if args.sample_rate == None else int(args.sample_rate)
     config = {
         bam_qc.CONFIG_KEY_BAM: args.bam,
@@ -140,6 +146,7 @@ def main():
         bam_qc.CONFIG_KEY_MARK_DUPLICATES: args.mark_duplicates,
         bam_qc.CONFIG_KEY_N_AS_MISMATCH: args.n_as_mismatch,
         bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: skip_below_mapq,
+        bam_qc.CONFIG_KEY_RANDOM_SEED: random_seed,
         bam_qc.CONFIG_KEY_REFERENCE: args.reference,
         bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
         bam_qc.CONFIG_KEY_TEMP_DIR: args.temp_dir,
