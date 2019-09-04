@@ -70,7 +70,7 @@ def validate_args(args):
         valid = valid and validate_positive_integer(args.insert_max, 'Max insert size')
     if args.sample != None:
         valid = valid and validate_positive_integer(args.sample, 'Downsampling level')
-        valid = validate_sample_level(args.all, args.sample)
+        valid = validate_sample_level(args.all_reads, args.sample)
     if args.bam == None:
         valid = False
         sys.stderr.write("ERROR: -b/--bam argument is required\n")
@@ -96,8 +96,8 @@ def validate_args(args):
 
 def main():
     parser = argparse.ArgumentParser(description='QC for BAM files.')
-    parser.add_argument('-a', '--all', action='store_true', help='Do not apply downsampling; use '+\
-                        'all reads as input to all QC metrics. Incompatible with --sample.')
+    parser.add_argument('-a', '--all-reads', action='store_true', help='Do not apply downsampling; '+\
+                        'use all reads as input to all QC metrics. Incompatible with --sample.')
     parser.add_argument('-b', '--bam', metavar='PATH', required=True,
                         help='Path to input BAM file. Required.')
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
@@ -130,7 +130,7 @@ def main():
                         'given, a default seed will be used.')
     parser.add_argument('-s', '--sample', metavar='INT',
                         help='Sample a total of INT reads from the BAM file, for input to slower '+\
-                        'QC metrics. Defaults to 1 million. Incompatible with --all.')
+                        'QC metrics. Defaults to 1 million. Incompatible with --all-reads.')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional. If given, must be sorted in same order as BAM file. '+\
@@ -153,7 +153,7 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     random_seed = None if args.random_seed == None else int(args.random_seed)
-    if args.all:
+    if args.all_reads:
         sample = None
     else:
         sample = DEFAULT_SAMPLE_LEVEL if args.sample == None else int(args.sample)
