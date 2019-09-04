@@ -196,11 +196,11 @@ class bam_qc(base):
     def configure_logger(self, log_path=None):
         logger = logging.getLogger(__name__)
         if self.debug:
-            log_level = getattr(logging, 'DEBUG')
+            log_level = logging.DEBUG
         elif self.verbose:
-            log_level = getattr(logging, 'INFO')
+            log_level = logging.INFO
         else:
-            log_level = getattr(logging, 'WARN')
+            log_level = logging.WARN
         logger.setLevel(log_level)
         handler = None
         if log_path==None:
