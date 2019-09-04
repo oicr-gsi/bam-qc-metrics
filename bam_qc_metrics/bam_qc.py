@@ -2,9 +2,9 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, math, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics, csv, json, logging, math, os, re, pybedtools, pysam, sys, tempfile
 
-class base:
+class base(object):
 
     """
     Class for shared constants
@@ -32,7 +32,10 @@ class version_updater(base):
             self.package_version = version
 
     def update_files(self):
-        filenames = ['expected.json', 'expected_downsampled.json', 'expected_no_target.json']
+        filenames = ['expected.json',
+                     'expected_downsampled.json',
+                     'expected_no_target.json',
+                     'expected_downsampled_rs88.json']
         for name in filenames:
             json_path = os.path.join(self.data_dir, name)
             with open(json_path) as f:
@@ -46,10 +49,13 @@ class version_updater(base):
 class bam_qc(base):
 
     CONFIG_KEY_BAM = 'bam'
+    CONFIG_KEY_DEBUG = 'debug'
     CONFIG_KEY_INSERT_MAX = 'insert max'
+    CONFIG_KEY_LOG = 'log path'
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
     CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
+    CONFIG_KEY_RANDOM_SEED = 'random seed'
     CONFIG_KEY_REFERENCE = 'reference'
     CONFIG_KEY_SAMPLE_RATE = 'sample rate'
     CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
@@ -78,16 +84,20 @@ class bam_qc(base):
         'run name',
         'sample'
     ]
-    RANDOM_SEED = 42
+    DEFAULT_RANDOM_SEED = 42
 
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
-        self.verbose = config[self.CONFIG_KEY_VERBOSE] # set this first; enables warnings
+        self.debug = config[self.CONFIG_KEY_DEBUG] # enable logging first in case of warnings
+        self.verbose = config[self.CONFIG_KEY_VERBOSE]
+        self.logger = self.configure_logger(config[self.CONFIG_KEY_LOG])
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
         self.n_as_mismatch = config[self.CONFIG_KEY_N_AS_MISMATCH]
+        seed = config[self.CONFIG_KEY_RANDOM_SEED]
+        self.random_seed = seed if seed != None else self.DEFAULT_RANDOM_SEED
         self.reference = config[self.CONFIG_KEY_REFERENCE]
         self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
@@ -101,50 +111,70 @@ class bam_qc(base):
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
         self.unmapped_excluded_reads = None
         # apply quality filter (if any); get input path for downsampling
+        self.logger.info("Started bam_qc processing")
         result = self.apply_mapq_filter(config[self.CONFIG_KEY_BAM])
         (fast_finder_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
+        self.logger.info("Started computing fast bam_qc metrics")
         fast_finder = fast_metric_finder(fast_finder_input_path,
                                          self.reference,
                                          self.expected_insert_max,
-                                         self.n_as_mismatch)
+                                         self.n_as_mismatch,
+                                         self.logger)
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
+        self.logger.info("Finished computing fast bam_qc metrics")
         # apply downsampling (if any)
         if self.sample_rate != None and self.sample_rate > 1:
             slow_finder_input_path = self.generate_downsampled_bam(fast_finder_input_path,
                                                                    self.sample_rate)
         else:
+            self.logger.info("Downsampling is not in effect")
             self.sample_rate = 1
             slow_finder_input_path = fast_finder_input_path
         # find 'slow' metrics on (maybe) downsampled dataset
+        self.logger.info("Started computing slow bam_qc metrics")
         slow_finder = slow_metric_finder(slow_finder_input_path,
                                          self.target_path,
                                          fast_finder.read_length_summary(),
-                                         self.verbose)
+                                         self.logger)
         self.slow_metrics = slow_finder.metrics
+        self.logger.info("Finished computing slow bam_qc metrics")
+        self.logger.info("Finished computing all bam_qc metrics")
 
     def apply_mapq_filter(self, bam_path):
         """
         Write a BAM file filtered by alignment quality
         Also report the number of reads failing quality filters, and number of unmapped reads
+        Samtools steps may be slow on large files; debug logging can be used to track progress
         """
         filtered_bam_path = None
         if self.mapq_filter_is_active():
             excluded_by_mapq_path = os.path.join(self.tmpdir, 'excluded.bam')
             included_by_mapq_path = os.path.join(self.tmpdir, 'included.bam')
+            self.logger.info("Started filtering input BAM file by mapping quality")
+            self.logger.debug("Started writing included/excluded bam files")
             pysam.view(bam_path,
                        '-b',
                        '-q', str(self.skip_below_mapq),
                        '-o', included_by_mapq_path,
                        '-U', excluded_by_mapq_path,
                        catch_stdout=False)
+            self.logger.debug("Finished writing included/excluded bam files")
+            self.logger.debug("Started counting excluded reads")
             total_failed_reads = int(pysam.view('-c', excluded_by_mapq_path).strip())
+            self.logger.debug("Finished counting excluded reads")
+            self.logger.info("Total reads excluded by mapq filter: %d", total_failed_reads)
             # unmapped reads will fail the mapping quality filter, by definition
             # so if the quality filter is applied, find unmapped total from the excluded reads
+            self.logger.debug("Started counting unmapped reads")
             unmapped_raw = pysam.view('-c', '-f', '4', excluded_by_mapq_path)
+            self.logger.debug("Finished counting unmapped reads")
             total_unmapped_and_excluded = int(unmapped_raw.strip())
+            self.logger.debug("Total unmapped and excluded reads: %d", total_unmapped_and_excluded)
             filtered_bam_path = included_by_mapq_path
+            self.logger.info("Finished filtering input BAM file by mapping quality")
         else:
+            self.logger.info("Mapping quality filter is not in effect")
             total_failed_reads = 0
             total_unmapped_and_excluded = 0
             filtered_bam_path = bam_path
@@ -158,34 +188,66 @@ class bam_qc(base):
         """
         if self.tmp_object != None:
             self.tmp_object.cleanup()
-        elif self.verbose:
-            sys.stderr.write("Omitting cleanup for user-specified "+\
-                             "temporary directory %s\n" % self.tmpdir)
+            self.logger.info("Cleaned up default temporary directory %s" % self.tmpdir)
+        else:
+            self.logger.info("Omitting cleanup for user-specified "+\
+                             "temporary directory %s" % self.tmpdir)
 
+    def configure_logger(self, log_path=None):
+        logger = logging.getLogger(__name__)
+        if self.debug:
+            log_level = logging.DEBUG
+        elif self.verbose:
+            log_level = logging.INFO
+        else:
+            log_level = logging.WARN
+        logger.setLevel(log_level)
+        handler = None
+        if log_path==None:
+            handler = logging.StreamHandler()
+        else:
+            handler = logging.FileHandler(log_path)
+        handler.setLevel(log_level)
+        formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s',
+                                      datefmt='%Y-%m-%d_%H:%M:%S')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
+            
     def generate_downsampled_bam(self, bam_path, sample_rate):
         """
         Write a temporary downsampled BAM file
         """
         downsampled_path = None
         if sample_rate == 1:
-            if self.verbose: sys.stderr.write("Sample rate = 1, omitting down sampling\n")
+            self.logger.info("Sample rate = 1, omitting down sampling")
             downsampled_path = bam_path
         elif sample_rate < 1:
-            raise ValueError("Sample rate cannot be less than 1")
+            msg = "Sample rate cannot be less than 1"
+            self.logger.error(msg)
+            raise ValueError(msg)
         else:
             # We are sampling every Nth read
             # Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
             # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
+            self.logger.info("Starting downsampling with sample rate %i", sample_rate)
+            if self.random_seed == self.DEFAULT_RANDOM_SEED:
+                self.logger.info("Using default random seed %i", self.DEFAULT_RANDOM_SEED)
+            else:
+                self.logger.info("Using custom random seed %i", self.random_seed)
             downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
             x = 1.0/sample_rate
             sf = 5 # significant figures for rounding the sample rate
             sample_decimal = round(x, sf - int(math.floor(math.log10(x)))-1)
-            sample_arg = str(self.RANDOM_SEED + sample_decimal)
+            sample_arg = str(self.random_seed + sample_decimal)
+            self.logger.debug("Sampling argument to 'samtools view' is %s", sample_arg)
             pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
             # sanity check on the downsampled file
+            self.logger.info("Finished downsampling with sample rate %i", sample_rate)
             sampled = int(pysam.view('-c', downsampled_path).strip())
+            self.logger.info("%i reads in downsampled set", sampled)
             if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
-                sys.stderr.write("WARNING: Only %i reads remain after downsampling\n" % sampled)
+                self.logger.warning("Only %i reads remain after downsampling", sampled)
         return downsampled_path
 
     def mapq_filter_is_active(self):
@@ -197,7 +259,7 @@ class bam_qc(base):
             with open(metadata_path) as f: raw_metadata = json.loads(f.read())
             metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
         else:
-            if self.verbose: sys.stderr.write("Metadata file not given, using empty defaults\n")
+            self.logger.info("Metadata file not given, using empty defaults")
             metadata = {key: None for key in self.METADATA_KEYS}
         return metadata
     
@@ -236,13 +298,16 @@ class bam_qc(base):
             else:
                 params = (input_path, section, line_count)
                 msg = "Failed to parse duplicate metrics path %s, section %d, line %d" % params
+                self.logger.error(msg)
                 raise ValueError(msg)
         if len(keys) == len(values) + 1 and keys[-1] == 'ESTIMATED_LIBRARY_SIZE':
             # field is empty (no trailing \t) for low coverage; append a default value
             values.append(0)
         elif len(keys) != len(values):
             # otherwise, mismatched key/value totals are an error
-            raise ValueError("Numbers of keys and values in %s do not match" % input_path)
+            msg = "Numbers of keys and values in %s do not match" % input_path
+            self.logger.error(msg)
+            raise ValueError(msg)
         metrics = {}
         for i in range(len(keys)):
             if keys[i] == 'PERCENT_DUPLICATION':
@@ -270,10 +335,11 @@ class bam_qc(base):
         """
         if self.mapq_filter_is_active():
             if metrics[self.UNMAPPED_READS_KEY] > 0:
-                raise ValueError("Mapping quality filter is in effect, so all unmapped "+\
-                                 "reads should have been removed from BAM input; but 'reads "+\
-                                 "unmapped' field from samtools stats is %d." \
-                                 % metrics[self.UNMAPPED_READS_KEY])
+                msg = "Mapping quality filter is in effect, so all unmapped reads should have been "+\
+                      "removed from BAM input; but 'reads unmapped' field from samtools stats is %d." \
+                      % metrics[self.UNMAPPED_READS_KEY]
+                self.logger.error(msg)
+                raise ValueError(msg)
             else:
                 metrics[self.UNMAPPED_READS_KEY] = self.unmapped_excluded_reads
         return metrics
@@ -297,20 +363,26 @@ class bam_qc(base):
         output['workflow version'] = self.workflow_version
         if out_path != '-':
             out_file = open(out_path, 'w')
+            dest = out_path
         else:
             out_file = sys.stdout
+            dest = 'STDOUT'
         print(json.dumps(output), file=out_file)
         if out_path != '-':
             out_file.close()
+        self.logger.debug("Wrote JSON output to %s" % dest)
 
     def validate_config_fields(self, config):
         """ Validate keys of the config dictionary for __init__ """
         expected = set([
             self.CONFIG_KEY_BAM,
+            self.CONFIG_KEY_DEBUG,
             self.CONFIG_KEY_INSERT_MAX,
+            self.CONFIG_KEY_LOG,
             self.CONFIG_KEY_MARK_DUPLICATES,
             self.CONFIG_KEY_METADATA,
             self.CONFIG_KEY_N_AS_MISMATCH,
+            self.CONFIG_KEY_RANDOM_SEED,
             self.CONFIG_KEY_REFERENCE,
             self.CONFIG_KEY_SAMPLE_RATE,
             self.CONFIG_KEY_SKIP_BELOW_MAPQ,
@@ -328,6 +400,7 @@ class bam_qc(base):
             msg = "Config fields are not valid\n"
             msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
             msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
+            # do not log this message; logger not yet initialized
             raise ValueError(msg)
 
 class fast_metric_finder(base):
@@ -346,11 +419,12 @@ class fast_metric_finder(base):
         'percentage of properly paired reads (%)'
     ])
     
-    def __init__(self, bam_path, reference, expected_insert_max, n_as_mismatch):
+    def __init__(self, bam_path, reference, expected_insert_max, n_as_mismatch, logger):
         self.bam_path = bam_path
         self.reference = reference
         self.expected_insert_max = expected_insert_max
         self.n_as_mismatch = n_as_mismatch
+        self.logger = logger
         # map from SN field names to output keys
         self.sn_key_map = {
             'bases mapped (cigar)': 'bases mapped',
@@ -441,6 +515,7 @@ class fast_metric_finder(base):
         mismatches['read 1 mismatch by cycle'] = r1_mismatch
         mismatches['read 2 mismatch by cycle'] = r2_mismatch
         mismatches['read ? mismatch by cycle'] = ur_mismatch
+        self.logger.debug("Found mismatches by cycle")
         return mismatches
 
     def fq_stats(self, rows):
@@ -508,6 +583,7 @@ class fast_metric_finder(base):
         metrics['paired end'] = metrics['paired reads'] > 0
         abnormal_count = self.count_mapped_abnormally_far(metrics['insert size histogram'])
         metrics['pairsMappedAbnormallyFar'] = abnormal_count
+        self.logger.debug("Found miscellaneous metrics from samtools stats")
         return metrics
     
     def parse_mismatch(self, samtools_stats):
@@ -570,7 +646,8 @@ class fast_metric_finder(base):
         metrics['read 1 quality by cycle'] = ffq_mean_by_cycle
         metrics['read 1 quality histogram'] = ffq_histogram
         metrics['read 2 quality by cycle'] = lfq_mean_by_cycle
-        metrics['read 2 quality histogram'] = lfq_histogram        
+        metrics['read 2 quality histogram'] = lfq_histogram
+        self.logger.debug("Found read length and quality metrics")
         return metrics
 
     def read_length_summary(self):
@@ -620,11 +697,11 @@ class slow_metric_finder(base):
     TOTAL_BY_CYCLE_KEY = 'total by cycle'
     QUALITY_HISTOGRAM_KEY = 'quality histogram'
 
-    def __init__(self, bam_path, target_path, read_lengths, verbose=False):
+    def __init__(self, bam_path, target_path, read_lengths, logger):
         self.bam_path = bam_path
         self.target_path = target_path
         self.read_lengths = read_lengths
-        self.verbose = verbose
+        self.logger = logger
         self.metrics = self.evaluate_all_metrics()
 
     def evaluate_all_metrics(self):
@@ -646,12 +723,12 @@ class slow_metric_finder(base):
             metrics['number of targets'] = targetBedTool.count()
             metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
             metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+            self.logger.debug("Found bedtools metrics")
         else:
-            if self.verbose:
-                print("No target path given, omitting bedtools metrics", file=sys.stderr)
             metrics['number of targets'] = None
             metrics['total target size'] = None
             metrics['reads on target'] = None
+            self.logger.info("No target path given, omitting bedtools metrics")
         # placeholders; TODO implement these metrics
         metrics['total coverage'] = None
         metrics['coverage per target'] = None
@@ -679,6 +756,7 @@ class slow_metric_finder(base):
             ur_quality_by_cycle[cycle] = q
         metrics['read ? quality by cycle'] = ur_quality_by_cycle
         metrics['read ? quality histogram'] = ur_stats[self.QUALITY_HISTOGRAM_KEY]
+        self.logger.debug("Found custom metrics from CIGAR strings etc.")
         return metrics
 
     def evaluate_reads_per_start_point(self, start_points):

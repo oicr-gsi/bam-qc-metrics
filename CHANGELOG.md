@@ -9,6 +9,10 @@ Fixed:
 
 Added:
 - GP-2045 Implementation of additional bedtools metrics
+- GP-2057 Logging and profiling
+- Command-line options for `--log` and `--profile`
+- `--verbose` and `--debug` options set the log level
+- Option to set random seed, with updated tests
 
 v0.1.6: 2019-08-16
 ------------------
