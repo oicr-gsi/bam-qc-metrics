@@ -2574,7 +2574,7 @@
     "readsMissingMDtags": 80020,
     "run name": "Simulated_Run",
     "sample": "Simulated_5X_chr21",
-    "sample rate": 1,
+    "sample level": 1000000,
     "soft clip bases": 0,
     "target file": null,
     "total coverage": null,
