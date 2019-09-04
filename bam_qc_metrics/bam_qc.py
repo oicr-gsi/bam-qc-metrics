@@ -55,7 +55,7 @@ class bam_qc(base):
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
     CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
-    CONFIG_KEY_RANDOM_SEED = 'random_seed'
+    CONFIG_KEY_RANDOM_SEED = 'random seed'
     CONFIG_KEY_REFERENCE = 'reference'
     CONFIG_KEY_SAMPLE_RATE = 'sample rate'
     CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
@@ -247,7 +247,7 @@ class bam_qc(base):
             sampled = int(pysam.view('-c', downsampled_path).strip())
             self.logger.info("%i reads in downsampled set", sampled)
             if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
-                self.logger.warning("WARNING: Only %i reads remain after downsampling", sampled)
+                self.logger.warning("Only %i reads remain after downsampling", sampled)
         return downsampled_path
 
     def mapq_filter_is_active(self):
@@ -728,7 +728,7 @@ class slow_metric_finder(base):
             metrics['number of targets'] = None
             metrics['total target size'] = None
             metrics['reads on target'] = None
-            self.logger.warning("No target path given, omitting bedtools metrics")
+            self.logger.info("No target path given, omitting bedtools metrics")
         # placeholders; TODO implement these metrics
         metrics['total coverage'] = None
         metrics['coverage per target'] = None
