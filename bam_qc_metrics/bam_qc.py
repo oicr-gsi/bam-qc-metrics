@@ -131,7 +131,6 @@ class bam_qc(base):
                                                                    total_reads)
         else:
             self.logger.info("Downsampling is not in effect")
-            self.sample_rate = 1
             slow_finder_input_path = fast_finder_input_path
         # find 'slow' metrics on (maybe) downsampled dataset
         self.logger.info("Started computing slow bam_qc metrics")
