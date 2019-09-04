@@ -6,6 +6,8 @@ import argparse, cProfile, os, re, sys, tempfile
 from bam_qc_metrics import bam_qc, read_package_version
 
 DEFAULT_INSERT_MAX = 1500
+DEFAULT_SAMPLE_LEVEL = 1000000
+MINIMUM_SAMPLE_LEVEL = 1000
 
 def validate_input_file(path_arg):
     valid = True
@@ -46,6 +48,19 @@ def validate_positive_integer(arg, name):
         valid = False
     return valid
 
+def validate_sample_level(sample_all, sample_level):
+    # assumes sample_level is a positive integer (not None)
+    valid = True
+    if sample_all == True:
+        sys.stderr.write("ERROR: Cannot specify both --all and --sample\n")
+        valid = False
+    elif int(sample_level) < MINIMUM_SAMPLE_LEVEL:
+        msg = "ERROR: Minimum sample level is %i reads." % MINIMUM_SAMPLE_LEVEL
+        msg = msg+" Increase the --sample argument, or use --all to omit downsampling.\n"
+        sys.stderr.write(msg)
+        valid = False
+    return valid
+
 def validate_args(args):
     valid = True
     # flip valid from True to False if a check is failed; never flip back to True
@@ -53,8 +68,9 @@ def validate_args(args):
         valid = validate_positive_integer(args.skip_below_mapq, 'Quality score')
     if args.insert_max != None:
         valid = valid and validate_positive_integer(args.insert_max, 'Max insert size')
-    if args.sample_rate != None:
-        valid = valid and validate_positive_integer(args.sample_rate, 'Downsampling rate')
+    if args.sample != None:
+        valid = valid and validate_positive_integer(args.sample, 'Downsampling level')
+        valid = validate_sample_level(args.all, args.sample)
     if args.bam == None:
         valid = False
         sys.stderr.write("ERROR: -b/--bam argument is required\n")
@@ -80,6 +96,8 @@ def validate_args(args):
 
 def main():
     parser = argparse.ArgumentParser(description='QC for BAM files.')
+    parser.add_argument('-a', '--all', action='store_true', help='Do not apply downsampling; use '+\
+                        'all reads as input to all QC metrics. Incompatible with --sample.')
     parser.add_argument('-b', '--bam', metavar='PATH', required=True,
                         help='Path to input BAM file. Required.')
     parser.add_argument('-d', '--mark-duplicates', metavar='PATH',
@@ -110,9 +128,9 @@ def main():
     parser.add_argument('-R', '--random-seed', metavar='INT', help='Set sampling random seed to '+\
                         'INT. Has no effect if --sample-rate not specified. Optional; if not '+\
                         'given, a default seed will be used.')
-    parser.add_argument('-s', '--sample-rate', metavar='INT',
-                        help='Sample every Nth read, where N is the argument. Optional, '+\
-                        'defaults to 1 (no sampling).')
+    parser.add_argument('-s', '--sample', metavar='INT',
+                        help='Sample a total of INT reads from the BAM file, for input to slower '+\
+                        'QC metrics. Defaults to 1 million. Incompatible with --all.')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional. If given, must be sorted in same order as BAM file. '+\
@@ -135,7 +153,10 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     random_seed = None if args.random_seed == None else int(args.random_seed)
-    sample_rate = None if args.sample_rate == None else int(args.sample_rate)
+    if args.all:
+        sample = None
+    else:
+        sample = DEFAULT_SAMPLE_LEVEL if args.sample == None else int(args.sample)
     config = {
         bam_qc.CONFIG_KEY_BAM: args.bam,
         bam_qc.CONFIG_KEY_DEBUG: args.debug,
@@ -148,7 +169,7 @@ def main():
         bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: skip_below_mapq,
         bam_qc.CONFIG_KEY_RANDOM_SEED: random_seed,
         bam_qc.CONFIG_KEY_REFERENCE: args.reference,
-        bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
+        bam_qc.CONFIG_KEY_SAMPLE: sample,
         bam_qc.CONFIG_KEY_TEMP_DIR: args.temp_dir,
         bam_qc.CONFIG_KEY_VERBOSE: args.verbose,
         bam_qc.CONFIG_KEY_WORKFLOW_VERSION: args.workflow_version
