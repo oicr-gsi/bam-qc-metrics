@@ -13,7 +13,7 @@ class test(unittest.TestCase):
         self.quality = 30
         self.insert_max = 1500
         self.sample_level = 10000
-        self.sample_default = 1000000
+        self.sample_default = 1100000
         self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_test_')
         self.tmpdir = self.tmp.name
         self.testdir = os.path.dirname(os.path.realpath(__file__))
@@ -53,7 +53,7 @@ class test(unittest.TestCase):
             "inserted bases": 315,
             "reads per start point": 1.031,
             "readsMissingMDtags": 80020,
-            "sample level": 1000000,
+            "sample level": self.sample_default,
             "total reads": 80020,
             "total target size": 527189,
         }
@@ -126,8 +126,8 @@ class test(unittest.TestCase):
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 315,
-            "reads per start point": 1.004, # downsampled
-            "readsMissingMDtags": self.sample_level, # downsampled
+            "reads per start point": 1.003, # downsampled
+            "readsMissingMDtags": 9762, # downsampled
             "sample level": self.sample_level,
             "total reads": 80020,
             "total target size": 527189,
@@ -308,7 +308,7 @@ class test(unittest.TestCase):
             "inserted bases": 315,
             "reads per start point": 1.031,
             "readsMissingMDtags": 80020,
-            "sample level": 1000000,
+            "sample level": self.sample_default,
             "total reads": 80020,
             "total target size": None,
         }

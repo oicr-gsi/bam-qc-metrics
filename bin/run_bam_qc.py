@@ -6,7 +6,7 @@ import argparse, cProfile, os, re, sys, tempfile
 from bam_qc_metrics import bam_qc, read_package_version
 
 DEFAULT_INSERT_MAX = 1500
-DEFAULT_SAMPLE_LEVEL = 1000000
+DEFAULT_SAMPLE_LEVEL = 1100000
 MINIMUM_SAMPLE_LEVEL = 1000
 
 def validate_input_file(path_arg):
@@ -130,7 +130,7 @@ def main():
                         'given, a default seed will be used.')
     parser.add_argument('-s', '--sample', metavar='INT',
                         help='Sample a total of INT reads from the BAM file, for input to slower '+\
-                        'QC metrics. Defaults to 1 million. Incompatible with --all-reads.')
+                        'QC metrics. Defaults to 1.1 million. Incompatible with --all-reads.')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional. If given, must be sorted in same order as BAM file. '+\

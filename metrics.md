@@ -99,19 +99,13 @@ If both are in effect, downsampling is applied first.
 
 Downsampling, in which metrics are computed on a randomly selected subset of reads, is applied for faster and more efficient data processing.
 
-The default is downsampling to exactly 1 million reads, if the input BAM contains more than 1 million; and no downsampling otherwise. Downsampling can be deactivated, or a custom rate specified, using command-line options.
-
 If downsampling is in effect, metrics derived from CIGAR strings and bedtools are evaluated on the downsampled reads. The estimated value of the metric on the full dataset must be scaled accordingly. For example, if 500 million reads have been downsampled to 1 million, and the reported 'hard clip bases' is 250, then there will be approximately 125,000 hard clip bases in the entire BAM file. Metrics derived directly from samtools will always be calculated on the full dataset, without downsampling. The `DS` column in the summary table records which metrics are affected by downsampling.
 
-Downsampling is a 2-part process:
-1. Use `samtools view` to select a subset slightly larger than required.
-2. Use Python's `random` module to reduce the initial subset to the correct size.
+Downsampling is carried out using `samtools view`. This command is fast and preserves read pairs, but does not allow sampling an exact number of reads, as it uses a probability of sampling rather than a fixed sample size. This is a [known issue](https://github.com/samtools/samtools/issues/955) with samtools and may be fixed at a later date. Alternatively, a workaround may be implemented in a subsequent version of `bam-qc-metrics`.
 
-This is done because `samtools` does not sample a fixed number of reads, but instead has a probability of sampling any given read; so the exact size of the subsampled set cannot be guaranteed. (This is a [known issue](https://github.com/samtools/samtools/issues/955) with samtools and may be fixed at a later date.) For paired-end data, `samtools` keeps the paired reads together; so if a given read 1 is part of the downsampled set, its corresponding read 2 will be as well.
+The default is downsampling to approximately 1.1 million reads, if the input BAM contains more than this number; and no downsampling otherwise. The default level was chosen so that the downsampled file should contain at least 1 million reads. Downsampling can be deactivated, or a custom rate specified, using command-line options.
 
-Read pairs are _not_ preserved by the Python implementation in step 2. Most metrics relating to paired-end behaviour are not downsampled, so this will have limited effect. The exception is `pairsMappedAbnormallyFar`, which this method may undercount by about 20%.
-
-In each step, a (different) fixed random seed is used, so results will be consistent on repeated runs of bam-qc-metrics. 
+A fixed random seed is used for downsampling, so results will be consistent on repeated runs of `bam-qc-metrics`.
 
 ### Quality filtering
 
