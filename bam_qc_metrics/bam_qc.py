@@ -2,7 +2,7 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, random, sys, tempfile
+import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, sys, tempfile
 
 class base(object):
 
