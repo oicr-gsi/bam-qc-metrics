@@ -9,6 +9,10 @@ Fixed:
 
 Added:
 - GP-2045 Implementation of additional bedtools metrics
+- GP-2048 Downsampling to exact number of reads
+- Command-line options `--all-reads` and `--sample` control sample level
+- Default number of reads to sample is 1 million
+- Downsampling has no effect if fewer than 1 million reads present
 - GP-2057 Logging and profiling
 - Command-line options for `--log` and `--profile`
 - `--verbose` and `--debug` options set the log level

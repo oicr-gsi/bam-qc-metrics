@@ -52,7 +52,7 @@ def validate_sample_level(sample_all, sample_level):
     # assumes sample_level is a positive integer (not None)
     valid = True
     if sample_all == True:
-        sys.stderr.write("ERROR: Cannot specify both --all and --sample\n")
+        sys.stderr.write("ERROR: Cannot specify both --all-reads and --sample\n")
         valid = False
     elif int(sample_level) < MINIMUM_SAMPLE_LEVEL:
         msg = "ERROR: Minimum sample level is %i reads." % MINIMUM_SAMPLE_LEVEL
