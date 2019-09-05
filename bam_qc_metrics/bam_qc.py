@@ -151,19 +151,19 @@ class bam_qc(base):
         - total_reads is number of reads in the file denoted by bam_path
         """
         downsampled_path = None
-        minimum_reads = 100
+        warning_threshold = 1000
         if sample_level > total_reads:
             msg = "Downsampling omitted: Total input reads = "+\
                   "%i, target number of reads for downsampled file = %i" % (total_reads, sample_level)
             self.logger.info(msg)
             downsampled_path = bam_path
-        elif sample_level < minimum_reads:
-            msg = "Number of desired reads cannot be less than %i" % minimum_reads
-            self.logger.error(msg)
-            raise ValueError(msg)
         else:
+            if sample_level < warning_threshold:
+                msg = "Requested number of reads is less than %i. " % minimum_reads
+                msg = msg+"Running with very few reads is not recommended; metrics may behave "+\
+                      "unexpectedly or fail to complete."
+                self.logger.warning(msg)
             downsampled_path = self.write_downsampled_bam(bam_path, sample_level, total_reads)
-        self.logger.debug("Finished downsampling")
         return downsampled_path
 
     def apply_mapq_filter(self, bam_path):
