@@ -127,7 +127,7 @@ class test(unittest.TestCase):
         expected_variables = {
             "inserted bases": 315,
             "reads per start point": 1.004, # downsampled
-            "readsMissingMDtags": 10000, # downsampled
+            "readsMissingMDtags": self.sample_level, # downsampled
             "sample level": self.sample_level,
             "total reads": 80020,
             "total target size": 527189,

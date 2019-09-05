@@ -2,7 +2,7 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, random, sys, tempfile
 
 class base(object):
 
@@ -85,6 +85,7 @@ class bam_qc(base):
         'sample'
     ]
     DEFAULT_RANDOM_SEED = 42
+    DOWNSAMPLING_CORRECTION_SEED = 1138
 
     def __init__(self, config):
         self.validate_config_fields(config)
@@ -241,13 +242,11 @@ class bam_qc(base):
             #
             # Number of reads output by `samtools -s` is only approximate
             # see https://github.com/samtools/samtools/issues/931
-            # Use a multiplier > 1 to ensure sufficient number of reads
-            # subsequently cut down the output file if needed
+            # Use a multiplier > 1 to ensure sufficient number of reads; then cut down the output
             msg = "Starting downsampling with sample level %i, total reads %i" \
                   % (sample_level, total_reads)
             self.logger.info(msg)
-            # TODO may be able to use a lower multiplier for larger input files
-            multiplier = 1.1
+            multiplier = 1.2
             if self.random_seed == self.DEFAULT_RANDOM_SEED:
                 self.logger.info("Using default random seed %i", self.DEFAULT_RANDOM_SEED)
             else:
@@ -271,13 +270,20 @@ class bam_qc(base):
                 downsampled_path = ds_raw_path
             else:
                 # sampled reads > desired total, need to cut down
+                # choose reads to remove at random (with known seed) from the initial sampled set
                 msg = "Found %i downsampled reads; correcting to %i" % (sampled, sample_level)
                 self.logger.debug(msg)
+                total_to_remove = sampled - sample_level
+                random.seed(self.DOWNSAMPLING_CORRECTION_SEED)
+                indices_to_remove = set(random.sample(range(sampled), total_to_remove))
                 ds_cor_path = os.path.join(self.tmpdir, 'downsampled_corrected.bam')
                 ds_raw_file = pysam.AlignmentFile(ds_raw_path, 'rb')
                 ds_cor_file = pysam.AlignmentFile(ds_cor_path, 'wb', template=ds_raw_file)
-                for read in ds_raw_file.head(sample_level):
-                    ds_cor_file.write(read)
+                i = 0
+                for read in ds_raw_file:
+                    if not i in indices_to_remove:
+                        ds_cor_file.write(read)
+                    i += 1
                 ds_raw_file.close()
                 ds_cor_file.close()
                 downsampled_path = ds_cor_path
