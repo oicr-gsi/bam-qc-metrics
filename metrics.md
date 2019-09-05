@@ -97,13 +97,21 @@ If both are in effect, downsampling is applied first.
 
 ### Downsampling
 
-Downsampling is applied for faster and more efficient data processing. Large BAM files, with more than approximately 1 million reads, are downsampled at a rate of 1 in 1000. The downsampling rate is recorded in the JSON output as `sample rate`. 
+Downsampling, in which metrics are computed on a randomly selected subset of reads, is applied for faster and more efficient data processing.
 
-The exact number of reads in a BAM file is not known unless one reads the entire file. To speed up decision-making, the number of reads is estimated from file size. A threshold of 100 MB corresponds to approximately 1 million reads of 2x151 length. Further details are on the [OICR wiki](https://wiki.oicr.on.ca/display/GSI/2019-04-04+Estimate+of+BAM+reads+from+file+size).
+The default is downsampling to exactly 1 million reads, if the input BAM contains more than 1 million; and no downsampling otherwise. Downsampling can be deactivated, or a custom rate specified, using command-line options.
 
-If downsampling is in effect, metrics derived from CIGAR strings and bedtools are evaluated on the downsampled reads. The estimated value of the metric on the full dataset must be scaled accordingly. For example, at a downsampling rate of 1 in 1000, if the reported 'hard clip bases' is 250, then there will be approximately 250,000 hard clip bases in the entire BAM file. Metrics derived directly from samtools will always be calculated on the full dataset, without downsampling. The `DS` column in the summary table records which metrics are affected by downsampling.
+If downsampling is in effect, metrics derived from CIGAR strings and bedtools are evaluated on the downsampled reads. The estimated value of the metric on the full dataset must be scaled accordingly. For example, if 500 million reads have been downsampled to 1 million, and the reported 'hard clip bases' is 250, then there will be approximately 125,000 hard clip bases in the entire BAM file. Metrics derived directly from samtools will always be calculated on the full dataset, without downsampling. The `DS` column in the summary table records which metrics are affected by downsampling.
 
-Downsampling is carried out using `samtools view` with a fixed random seed, so results will be consistent on repeated runs of bam-qc-metrics. For paired-end data, if a given read 1 is part of the downsampled set, its corresponding read 2 will be as well.
+Downsampling is a 2-part process:
+1. Use `samtools view` to select a subset slightly larger than required.
+2. Use Python's `random` module to reduce the initial subset to the correct size.
+
+This is done because `samtools` does not sample a fixed number of reads, but instead has a probability of sampling any given read; so the exact size of the subsampled set cannot be guaranteed. (This is a [known issue](https://github.com/samtools/samtools/issues/955) with samtools and may be fixed at a later date.) For paired-end data, `samtools` keeps the paired reads together; so if a given read 1 is part of the downsampled set, its corresponding read 2 will be as well.
+
+Read pairs are _not_ preserved by the Python implementation in step 2. Most metrics relating to paired-end behaviour are not downsampled, so this will have limited effect. The exception is `pairsMappedAbnormallyFar`, which this method may undercount by about 20%.
+
+In each step, a (different) fixed random seed is used, so results will be consistent on repeated runs of bam-qc-metrics. 
 
 ### Quality filtering
 
