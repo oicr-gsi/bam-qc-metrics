@@ -2,7 +2,7 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, logging, math, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, sys, tempfile
 
 class base(object):
 
@@ -15,6 +15,7 @@ class base(object):
     READ_1_LENGTH_KEY = 'read 1'
     READ_2_LENGTH_KEY = 'read 2'
     MAX_READ_LENGTH_KEY = 'max_read_length'
+    TOTAL_READS_KEY = 'total reads'
     UNMAPPED_READS_KEY = 'unmapped reads'
     PACKAGE_VERSION_KEY = 'package version'
 
@@ -57,7 +58,7 @@ class bam_qc(base):
     CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
     CONFIG_KEY_RANDOM_SEED = 'random seed'
     CONFIG_KEY_REFERENCE = 'reference'
-    CONFIG_KEY_SAMPLE_RATE = 'sample rate'
+    CONFIG_KEY_SAMPLE = 'sample'
     CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
     CONFIG_KEY_TARGET = 'target'
     CONFIG_KEY_TEMP_DIR = 'temp dir'
@@ -75,7 +76,6 @@ class bam_qc(base):
         "UNPAIRED_READS_EXAMINED": None,
         "UNPAIRED_READ_DUPLICATES": None
     }
-    DOWNSAMPLE_WARNING_THRESHOLD = 1000
     METADATA_KEYS = [
         'barcode',
         'instrument',
@@ -99,7 +99,7 @@ class bam_qc(base):
         seed = config[self.CONFIG_KEY_RANDOM_SEED]
         self.random_seed = seed if seed != None else self.DEFAULT_RANDOM_SEED
         self.reference = config[self.CONFIG_KEY_REFERENCE]
-        self.sample_rate = config[self.CONFIG_KEY_SAMPLE_RATE]
+        self.sample_level = config[self.CONFIG_KEY_SAMPLE]
         self.skip_below_mapq = config[self.CONFIG_KEY_SKIP_BELOW_MAPQ]
         self.target_path = config[self.CONFIG_KEY_TARGET]
         self.workflow_version = config[self.CONFIG_KEY_WORKFLOW_VERSION]
@@ -107,6 +107,7 @@ class bam_qc(base):
         self.fast_metrics = None
         self.package_version = bam_qc_metrics.read_package_version()
         self.qual_fail_reads = None
+        self.sample_total = None
         self.slow_metrics = None
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
         self.unmapped_excluded_reads = None
@@ -124,12 +125,12 @@ class bam_qc(base):
         self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
         self.logger.info("Finished computing fast bam_qc metrics")
         # apply downsampling (if any)
-        if self.sample_rate != None and self.sample_rate > 1:
-            slow_finder_input_path = self.generate_downsampled_bam(fast_finder_input_path,
-                                                                   self.sample_rate)
+        if self.sample_level != None:
+            total_reads = self.fast_metrics[self.TOTAL_READS_KEY]
+            args = [fast_finder_input_path, self.sample_level, total_reads]
+            (slow_finder_input_path, self.sample_total) = self.apply_downsampling(*args)
         else:
-            self.logger.info("Downsampling is not in effect")
-            self.sample_rate = 1
+            self.logger.info("Downsampling option is not in effect")
             slow_finder_input_path = fast_finder_input_path
         # find 'slow' metrics on (maybe) downsampled dataset
         self.logger.info("Started computing slow bam_qc metrics")
@@ -141,9 +142,32 @@ class bam_qc(base):
         self.logger.info("Finished computing slow bam_qc metrics")
         self.logger.info("Finished computing all bam_qc metrics")
 
+    def apply_downsampling(self, bam_path, sample_level, total_reads):
+        """
+        Write a temporary downsampled BAM file (if applicable):
+        - bam_path is the input BAM file
+        - sample_level is number of reads desired in the downsampled file
+        - total_reads is number of reads in the file denoted by bam_path
+        """
+        [ds_path, ds_total] = [None]*2
+        warning_threshold = 1000
+        if sample_level >= total_reads:
+            msg = "Downsampling omitted: Total input reads = "+\
+                  "%i, target number of reads for downsampled file = %i" % (total_reads, sample_level)
+            self.logger.info(msg)
+            ds_path = bam_path
+        else:
+            if sample_level < warning_threshold:
+                msg = "Requested number of reads is less than %i. " % warning_threshold
+                msg = msg+"Running with very few reads is not recommended; metrics may behave "+\
+                      "unexpectedly or fail to complete."
+                self.logger.warning(msg)
+            (ds_path, ds_total) = self.write_downsampled_bam(bam_path, sample_level, total_reads)
+        return (ds_path, ds_total)
+
     def apply_mapq_filter(self, bam_path):
         """
-        Write a BAM file filtered by alignment quality
+        Write a BAM file filtered by alignment quality (if applicable)
         Also report the number of reads failing quality filters, and number of unmapped reads
         Samtools steps may be slow on large files; debug logging can be used to track progress
         """
@@ -213,42 +237,6 @@ class bam_qc(base):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         return logger
-            
-    def generate_downsampled_bam(self, bam_path, sample_rate):
-        """
-        Write a temporary downsampled BAM file
-        """
-        downsampled_path = None
-        if sample_rate == 1:
-            self.logger.info("Sample rate = 1, omitting down sampling")
-            downsampled_path = bam_path
-        elif sample_rate < 1:
-            msg = "Sample rate cannot be less than 1"
-            self.logger.error(msg)
-            raise ValueError(msg)
-        else:
-            # We are sampling every Nth read
-            # Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
-            # Eg. for random seed 42 and sample rate 4, 42 + (1/4) = 42.25
-            self.logger.info("Starting downsampling with sample rate %i", sample_rate)
-            if self.random_seed == self.DEFAULT_RANDOM_SEED:
-                self.logger.info("Using default random seed %i", self.DEFAULT_RANDOM_SEED)
-            else:
-                self.logger.info("Using custom random seed %i", self.random_seed)
-            downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
-            x = 1.0/sample_rate
-            sf = 5 # significant figures for rounding the sample rate
-            sample_decimal = round(x, sf - int(math.floor(math.log10(x)))-1)
-            sample_arg = str(self.random_seed + sample_decimal)
-            self.logger.debug("Sampling argument to 'samtools view' is %s", sample_arg)
-            pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
-            # sanity check on the downsampled file
-            self.logger.info("Finished downsampling with sample rate %i", sample_rate)
-            sampled = int(pysam.view('-c', downsampled_path).strip())
-            self.logger.info("%i reads in downsampled set", sampled)
-            if sampled < self.DOWNSAMPLE_WARNING_THRESHOLD:
-                self.logger.warning("Only %i reads remain after downsampling", sampled)
-        return downsampled_path
 
     def mapq_filter_is_active(self):
         return self.skip_below_mapq != None and self.skip_below_mapq > 0
@@ -344,34 +332,6 @@ class bam_qc(base):
                 metrics[self.UNMAPPED_READS_KEY] = self.unmapped_excluded_reads
         return metrics
 
-    def write_output(self, out_path):
-        output = {}
-        for key in self.METADATA_KEYS:
-            output[key] = self.metadata.get(key)
-        for key in self.fast_metrics.keys():
-            output[key] = self.fast_metrics.get(key)
-        for key in self.slow_metrics.keys():
-            output[key] = self.slow_metrics.get(key)
-        output['alignment reference'] = self.reference
-        output['insert max'] = self.expected_insert_max
-        output['mark duplicates'] = self.mark_duplicates_metrics
-        output['qual cut'] = self.skip_below_mapq
-        output['qual fail reads'] = self.qual_fail_reads
-        output[self.PACKAGE_VERSION_KEY] = self.package_version
-        output['sample rate'] = self.sample_rate
-        output['target file'] = os.path.split(self.target_path)[-1] if self.target_path else None
-        output['workflow version'] = self.workflow_version
-        if out_path != '-':
-            out_file = open(out_path, 'w')
-            dest = out_path
-        else:
-            out_file = sys.stdout
-            dest = 'STDOUT'
-        print(json.dumps(output), file=out_file)
-        if out_path != '-':
-            out_file.close()
-        self.logger.debug("Wrote JSON output to %s" % dest)
-
     def validate_config_fields(self, config):
         """ Validate keys of the config dictionary for __init__ """
         expected = set([
@@ -384,7 +344,7 @@ class bam_qc(base):
             self.CONFIG_KEY_N_AS_MISMATCH,
             self.CONFIG_KEY_RANDOM_SEED,
             self.CONFIG_KEY_REFERENCE,
-            self.CONFIG_KEY_SAMPLE_RATE,
+            self.CONFIG_KEY_SAMPLE,
             self.CONFIG_KEY_SKIP_BELOW_MAPQ,
             self.CONFIG_KEY_TARGET,
             self.CONFIG_KEY_TEMP_DIR,
@@ -402,6 +362,71 @@ class bam_qc(base):
             msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
             # do not log this message; logger not yet initialized
             raise ValueError(msg)
+
+    def write_downsampled_bam(self, bam_path, sample_level, total_reads):
+        """
+        Write a temporary downsampled BAM file:
+        - bam_path is the input BAM file
+        - sample_level is number of reads desired in the downsampled file
+        - total_reads is number of reads in the file denoted by bam_path
+
+        Uses `samtools -s`
+        Argument to `samtools -s` is of the form RANDOM_SEED.DECIMAL_RATE
+        Eg. for random seed 42 and sample rate of 1 in 4, 42 + (1/4) = 42.25
+        DECIMAL_RATE = (SAMPLE_LEVEL * MULTIPLIER) / TOTAL_READS
+
+        Number of reads output by `samtools -s` is only approximate
+        see https://github.com/samtools/samtools/issues/931
+        """
+        msg = "Starting downsampling with sample level %i, total reads %i" \
+              % (sample_level, total_reads)
+        self.logger.info(msg)
+        if sample_level >= total_reads:
+            msg = "Sample level must be less than the total number of reads"
+            self.logger.error(msg)
+            raise ValueError(msg)
+        sample_decimal = float(sample_level) / total_reads
+        if self.random_seed == self.DEFAULT_RANDOM_SEED:
+            self.logger.info("Using default random seed %i", self.DEFAULT_RANDOM_SEED)
+        else:
+            self.logger.info("Using custom random seed %i", self.random_seed)
+        sample_arg = str(self.random_seed + sample_decimal)
+        self.logger.debug("Sampling argument to 'samtools view' is %s", sample_arg)
+        downsampled_path = os.path.join(self.tmpdir, 'downsampled.bam')
+        pysam.view('-u', '-s', sample_arg, '-o', downsampled_path, bam_path, catch_stdout=False)
+        sampled = int(pysam.view('-c', downsampled_path).strip())
+        self.logger.info("Finished downsampling; %i reads found." % sampled)
+        return (downsampled_path, sampled)
+
+    def write_output(self, out_path):
+        output = {}
+        for key in self.METADATA_KEYS:
+            output[key] = self.metadata.get(key)
+        for key in self.fast_metrics.keys():
+            output[key] = self.fast_metrics.get(key)
+        for key in self.slow_metrics.keys():
+            output[key] = self.slow_metrics.get(key)
+        output['alignment reference'] = self.reference
+        output['insert max'] = self.expected_insert_max
+        output['mark duplicates'] = self.mark_duplicates_metrics
+        output['qual cut'] = self.skip_below_mapq
+        output['qual fail reads'] = self.qual_fail_reads
+        output[self.PACKAGE_VERSION_KEY] = self.package_version
+        output['sample level'] = self.sample_level
+        output['sample total'] = self.sample_total
+        output['target file'] = os.path.split(self.target_path)[-1] if self.target_path else None
+        output['workflow version'] = self.workflow_version
+        if out_path != '-':
+            out_file = open(out_path, 'w')
+            dest = out_path
+        else:
+            out_file = sys.stdout
+            dest = 'STDOUT'
+        print(json.dumps(output), file=out_file)
+        if out_path != '-':
+            out_file.close()
+        self.logger.debug("Wrote JSON output to %s" % dest)
+
 
 class fast_metric_finder(base):
 
@@ -438,7 +463,7 @@ class fast_metric_finder(base):
             'reads paired': 'paired reads',
             'pairs on different chromosomes': 'pairsMappedToDifferentChr',
             'reads properly paired': 'properly paired reads',
-            'raw total sequences': 'total reads',
+            'raw total sequences': self.TOTAL_READS_KEY,
             'reads unmapped': self.UNMAPPED_READS_KEY,
             'non-primary alignments': 'non primary reads',
         }

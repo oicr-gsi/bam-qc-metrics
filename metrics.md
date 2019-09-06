@@ -1,6 +1,11 @@
 # Metric specifications for BamQC
 
-BamQC metrics are computed using a number of methods, including third-party software tools, and output in JSON format. The output also contains metadata, such as the instrument and lane names; and input parameters, such as the target file. This document summarizes how metrics are computed, and details some special cases of interest.
+BamQC metrics are computed using a number of methods, including third-party software tools, and output in JSON format. The output also contains metadata, such as the instrument and lane names; and input parameters, such as the target file.
+
+This document:
+- Summarizes how metrics are computed
+- Describes read filtering options
+- Details some special cases of interest
 
 Some metrics have been renamed in the move from the old Perl to new Python implementation.
 
@@ -72,7 +77,8 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | readsMissingMDtags              |                         | CIGAR                   | Y  |
 | run name                        |                         | metadata                | N  |
 | sample                          |                         | metadata                | N  |
-| sample rate                     |                         | input parameter         | N  |
+| sample level                    |                         | input parameter         | N  |
+| sample total                    |                         | samtools view -s        | N  |
 | soft clip bases                 |                         | CIGAR                   | Y  |
 | target file                     |                         | input parameter         | N  |
 | total coverage                  |                         | bedtools TBD            | Y  |
@@ -93,21 +99,32 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 
 There are two possible filter mechanisms in BamQC: _downsampling_ and _quality filtering_.
 
-If both are in effect, downsampling is applied first.
+If both are in effect, quality filtering is applied first.
+
+### Speed considerations
+
+On large BAM files, quality filtering is slow, as it writes a large temporary file containing the reads which pass filters. Omitting quality filtering may result in a substantial speed gain. Downsampling is considerably faster, as the output file written is small.
+
+For example, time taken to process a NovaSeq BAM file (22 GB, 545M reads) was as follows:
+- Quality filtering on, downsampling off: 10 hours
+- Quality filtering on, downsampling on: 67 minutes
+- Quality filtering off, downsampling off: 22 minutes
 
 ### Downsampling
 
-Downsampling is applied for faster and more efficient data processing. Large BAM files, with more than approximately 1 million reads, are downsampled at a rate of 1 in 1000. The downsampling rate is recorded in the JSON output as `sample rate`. 
+Downsampling, in which metrics are computed on a randomly selected subset of reads, may be applied for faster and more efficient data processing.
 
-The exact number of reads in a BAM file is not known unless one reads the entire file. To speed up decision-making, the number of reads is estimated from file size. A threshold of 100 MB corresponds to approximately 1 million reads of 2x151 length. Further details are on the [OICR wiki](https://wiki.oicr.on.ca/display/GSI/2019-04-04+Estimate+of+BAM+reads+from+file+size).
+If downsampling is in effect, metrics derived from CIGAR strings and bedtools are evaluated on the downsampled reads. The estimated value of the metric on the full dataset must be scaled accordingly. For example, if 500 million reads have been downsampled to 1 million, and the reported 'hard clip bases' is 250, there will be approximately 125,000 hard clip bases in the entire BAM file. Metrics derived directly from samtools will always be calculated on the full dataset, without downsampling. The `DS` column in the summary table records which metrics are affected by downsampling.
 
-If downsampling is in effect, metrics derived from CIGAR strings and bedtools are evaluated on the downsampled reads. The estimated value of the metric on the full dataset must be scaled accordingly. For example, at a downsampling rate of 1 in 1000, if the reported 'hard clip bases' is 250, then there will be approximately 250,000 hard clip bases in the entire BAM file. Metrics derived directly from samtools will always be calculated on the full dataset, without downsampling. The `DS` column in the summary table records which metrics are affected by downsampling.
+Downsampling is carried out using `samtools view -s`. This method is fast and preserves read pairs, but does not allow sampling an exact number of reads, as it uses a probability of sampling rather than a fixed sample size. This is a [known issue](https://github.com/samtools/samtools/issues/955) with samtools and may be fixed at a later date. Alternatively, a workaround may be implemented in a subsequent version of `bam-qc-metrics`.
 
-Downsampling is carried out using `samtools view` with a fixed random seed, so results will be consistent on repeated runs of bam-qc-metrics. For paired-end data, if a given read 1 is part of the downsampled set, its corresponding read 2 will be as well.
+The default is downsampling to approximately 1.1 million reads, if the input BAM contains more than this number; and no downsampling otherwise. The default level was chosen so the downsampled file should contain at least 1 million reads. Downsampling can be deactivated, or a custom rate specified, using command-line options. In JSON output, `sample_level` is the target number of reads to downsample, and `sample_total` is the actual number of reads returned by samtools.
+
+A fixed random seed is used for downsampling, so results will be consistent on repeated runs of `bam-qc-metrics`.
 
 ### Quality filtering
 
-BamQC has an option to exclude reads with alignment quality below a given threshold.
+BamQC has an option to exclude reads with alignment quality below a given threshold. The filter is implemented using `samtools view -q`.
 
 If quality filtering is in effect, the `unmapped reads` metric is computed only on reads which _failed_ the filter -- because by definition, an unmapped read does not have an alignment quality. All other metrics are computed only on reads which _passed_ the filter.
 

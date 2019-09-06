@@ -12,6 +12,8 @@ class test(unittest.TestCase):
     def setUp(self):
         self.quality = 30
         self.insert_max = 1500
+        self.sample_level = 10000
+        self.sample_default = 1100000
         self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_test_')
         self.tmpdir = self.tmp.name
         self.testdir = os.path.dirname(os.path.realpath(__file__))
@@ -51,7 +53,7 @@ class test(unittest.TestCase):
             "inserted bases": 315,
             "reads per start point": 1.031,
             "readsMissingMDtags": 80020,
-            "sample rate": 1,
+            "sample level": self.sample_default,
             "total reads": 80020,
             "total target size": 527189,
         }
@@ -86,7 +88,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
             bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -98,7 +100,6 @@ class test(unittest.TestCase):
         qc.cleanup()
         
     def test_downsampled_analysis(self):
-        sample_rate = 10
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
@@ -111,7 +112,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
             bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_level,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -125,9 +126,9 @@ class test(unittest.TestCase):
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 315,
-            "reads per start point": 1.002, # downsampled
-            "readsMissingMDtags": 7874, # downsampled
-            "sample rate": sample_rate,
+            "reads per start point": 1.003, # downsampled
+            "readsMissingMDtags": 9762, # downsampled
+            "sample level": self.sample_level,
             "total reads": 80020,
             "total target size": 527189,
         }
@@ -166,7 +167,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
             bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -212,7 +213,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
             bam_qc.CONFIG_KEY_RANDOM_SEED: 88,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: 10,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_level,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -292,7 +293,7 @@ class test(unittest.TestCase):
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
             bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -307,7 +308,7 @@ class test(unittest.TestCase):
             "inserted bases": 315,
             "reads per start point": 1.031,
             "readsMissingMDtags": 80020,
-            "sample rate": 1,
+            "sample level": self.sample_default,
             "total reads": 80020,
             "total target size": None,
         }
