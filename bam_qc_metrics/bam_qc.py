@@ -158,7 +158,7 @@ class bam_qc(base):
             ds_path = bam_path
         else:
             if sample_level < warning_threshold:
-                msg = "Requested number of reads is less than %i. " % minimum_reads
+                msg = "Requested number of reads is less than %i. " % warning_threshold
                 msg = msg+"Running with very few reads is not recommended; metrics may behave "+\
                       "unexpectedly or fail to complete."
                 self.logger.warning(msg)
