@@ -2,7 +2,8 @@
 
 """Main class to compute BAM QC metrics"""
 
-import bam_qc_metrics, csv, json, logging, os, re, pybedtools, pysam, sys, tempfile
+import bam_qc_metrics
+import csv, json, logging, os, re, pybedtools, pysam, subprocess, sys, tempfile
 
 class base(object):
 
@@ -748,19 +749,58 @@ class slow_metric_finder(base):
             metrics['number of targets'] = targetBedTool.count()
             metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
             metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
-            self.logger.debug("Found bedtools metrics")
+            result = self.evaluate_bedtools_coverage(bamBedTool, targetBedTool)
+            [metrics['total coverage'], metrics['coverage per target']] = result
+            self.logger.info("Found bedtools metrics")
         else:
             metrics['number of targets'] = None
             metrics['total target size'] = None
             metrics['reads on target'] = None
+            metrics['total coverage'] = None
+            metrics['coverage per target'] = {}
             self.logger.info("No target path given, omitting bedtools metrics")
-        # placeholders; TODO implement these metrics
-        metrics['total coverage'] = None
-        metrics['coverage per target'] = None
-        # TODO add bedtools coverage metrics?
-        #coverage = targetBedTool.coverage(self.bam_path)
-        #print(coverage)
         return metrics
+
+    def evaluate_bedtools_coverage(self, bamBedTool, targetBedTool):
+        """
+        Find the bedtools coverage histogram and process to get coverage by target.
+        For each target, coverage = total bases on target / target size
+        """
+        hist_str = self.run_bedtools()
+        self.logger.debug("Found bedtools coverage histogram")
+        reader = csv.reader(re.split("\n", hist_str.strip()), delimiter="\t")
+        all_name = 'all'
+        by_target = {}
+        target_sizes = {}
+        # row either starts with 'all', or with (chromosome, start, end)
+        # row ends with (depth, bases, target_size, fraction_covered)
+        int_expr = re.compile("^[0-9]+$")
+        for row in reader:
+            if len(row) == 5 and row[0] == all_name:
+                target = all_name
+            elif len(row) >= 7 and int_expr.match(row[1]) and int_expr.match(row[2]):
+                target = ','.join(row[0:3])
+            else:
+                msg = "Cannot parse target in bedtools output: '"+str(row)+"'"
+                self.logger.error(msg)
+                raise ValueError(msg)
+            coverage_fields = row[-4:]
+            try:
+                [depth, bases, target_size] = [int(x) for x in coverage_fields[0:3]]
+                # coverage_fields[3] = fraction covered; not used here
+            except ValueError:
+                msg = "Cannot parse coverage in bedtools output: '"+str(row)+"'"
+                self.logger.error(msg)
+                raise
+            target_sizes[target] = target_size
+            by_target[target] = by_target.get(target, 0) + depth*bases
+        for target in target_sizes.keys():
+            coverage = float(by_target[target]) / target_sizes[target]
+            by_target[target] = round(coverage, self.FINE_PRECISION)
+        total = by_target[all_name]
+        del by_target[all_name]
+        self.logger.debug("Found bedtools coverage by target")
+        return (total, by_target)
 
     def evaluate_custom_metrics(self):
         [metrics, ur_stats, start_points] = self.process_bam_file()
@@ -854,6 +894,32 @@ class slow_metric_finder(base):
                ur_stats = self.update_ur_stats(ur_stats, read)
         start_points = len(start_point_set)
         return (metrics, ur_stats, start_points)
+
+    def run_bedtools(self):
+        """
+        Requires bedtools to be available on the PATH.
+
+        We would prefer to find coverage with pybedtools, eg.
+           coverage = targetBedTool.coverage(bamBedTool, hist=True)
+        but this fails with a MalformedBedLineError -- probable bug in pybedtools.
+        For now, we instead use subprocess to call bedtools directly.
+        TODO update if a pybedtools future release fixes the bug
+        """
+        args = ['bedtools',
+                'coverage',
+                '-a', self.target_path,
+                '-b', self.bam_path,
+                '-hist']
+        hist_str = None
+        try:
+            hist_str = subprocess.run(args,
+                                      check=True,
+                                      stdout=subprocess.PIPE,
+                                      universal_newlines=True).stdout
+        except subprocess.CalledProcessError as cpe:
+            self.logger.error("Failure running bedtools: {0}".format(cpe))
+            raise
+        return hist_str
 
     def update_metrics(self, metrics, read, read_index):
         """ Update the metrics dictionary for a pysam 'read' object """
