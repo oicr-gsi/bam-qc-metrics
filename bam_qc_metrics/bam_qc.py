@@ -749,9 +749,11 @@ class slow_metric_finder(base):
             metrics['number of targets'] = targetBedTool.count()
             metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
             metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
-            [total, by_target, coverage_hist] = self.evaluate_coverage(bamBedTool, targetBedTool)
+            result = self.evaluate_coverage(bamBedTool, targetBedTool)
+            [total, by_target, target_sizes, coverage_hist] = result
             metrics['total coverage'] = total
             metrics['coverage per target'] = by_target
+            metrics['target sizes'] = target_sizes
             metrics['coverage histogram'] = coverage_hist
             self.logger.info("Found bedtools metrics")
         else:
@@ -760,6 +762,7 @@ class slow_metric_finder(base):
             metrics['reads on target'] = None
             metrics['total coverage'] = None
             metrics['coverage per target'] = {}
+            metrics['target sizes'] = {}
             metrics['coverage histogram'] = {}
             self.logger.info("No target path given, omitting bedtools metrics")
         return metrics
@@ -806,12 +809,10 @@ class slow_metric_finder(base):
             by_target[target] = by_target.get(target, 0) + depth*bases
             if target == all_name:
                 coverage_hist[depth] = bases
-        for target in target_sizes.keys():
-            by_target[target] = float(by_target[target]) / target_sizes[target] # not rounded for JSON
         total = by_target[all_name]
         del by_target[all_name]
         self.logger.debug("Found bedtools coverage by target")
-        return (total, by_target, coverage_hist)
+        return (total, by_target, target_sizes, coverage_hist)
 
     def evaluate_custom_metrics(self):
         [metrics, ur_stats, start_points] = self.process_bam_file()

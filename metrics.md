@@ -82,6 +82,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | sample total                    |                         | samtools view -s        | N  |
 | soft clip bases                 |                         | CIGAR                   | Y  |
 | target file                     |                         | input parameter         | N  |
+| target sizes                    |                         | bedtools                | Y  |
 | total coverage                  |                         | bedtools                | Y  |
 | total reads                     |                         | samtools stats: SN      | N  |
 | total target size               | target size             | bedtools                | N  |

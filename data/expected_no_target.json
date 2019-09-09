@@ -2579,6 +2579,7 @@
     "sample total": null,
     "soft clip bases": 0,
     "target file": null,
+    "target sizes": {},
     "total coverage": null,
     "total reads": 80020,
     "total target size": null,
