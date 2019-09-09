@@ -18,6 +18,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | barcode                         |                         | metadata                | N  |
 | bases mapped                    | aligned bases           | samtools stats: SN      | N  |
 | coverage per target             |                         | bedtools                | Y  |
+| coverage histogram              |                         | bedtools                | Y  |
 | deleted bases                   |                         | samtools stats: ID      | N  |
 | hard clip bases                 |                         | CIGAR                   | Y  |
 | insert max                      |                         | input parameter         | N  |
@@ -91,7 +92,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 
 ## General notes on data sources
 
-- `samtools` and `bedtools` are wrapped by the Python packages `pysam` and `pybedtools`, respectively.
+- `samtools` and `bedtools` are wrapped by the Python packages `pysam` and `pybedtools`, respectively. (Exception: For coverage metrics, `bedtools` is called in a subprocess to circumvent a bug in `pybedtools`.)
 - `pysam` is also used for processing CIGAR strings.
 - `pairsMappedAbnormallyFar` is a secondary metric, computed from the insert size histogram, which in turn is derived from `samtools stats`. In this instance, 'abnormal' is defined by the `insert max` parameter.
 

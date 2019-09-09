@@ -749,8 +749,10 @@ class slow_metric_finder(base):
             metrics['number of targets'] = targetBedTool.count()
             metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
             metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
-            result = self.evaluate_bedtools_coverage(bamBedTool, targetBedTool)
-            [metrics['total coverage'], metrics['coverage per target']] = result
+            [total, by_target, coverage_hist] = self.evaluate_coverage(bamBedTool, targetBedTool)
+            metrics['total coverage'] = total
+            metrics['coverage per target'] = by_target
+            metrics['coverage histogram'] = coverage_hist
             self.logger.info("Found bedtools metrics")
         else:
             metrics['number of targets'] = None
@@ -758,19 +760,25 @@ class slow_metric_finder(base):
             metrics['reads on target'] = None
             metrics['total coverage'] = None
             metrics['coverage per target'] = {}
+            metrics['coverage histogram'] = {}
             self.logger.info("No target path given, omitting bedtools metrics")
         return metrics
 
-    def evaluate_bedtools_coverage(self, bamBedTool, targetBedTool):
+    def evaluate_coverage(self, bamBedTool, targetBedTool):
         """
         Find the bedtools coverage histogram and process to get coverage by target.
         For each target, coverage = total bases on target / target size
+        Return:
+        - Total coverage
+        - Coverage by target
+        - Histogram of coverage depth across all targets
         """
         hist_str = self.run_bedtools()
         self.logger.debug("Found bedtools coverage histogram")
         reader = csv.reader(re.split("\n", hist_str.strip()), delimiter="\t")
         all_name = 'all'
         by_target = {}
+        coverage_hist = {}
         target_sizes = {}
         # row either starts with 'all', or with (chromosome, start, end)
         # row ends with (depth, bases, target_size, fraction_covered)
@@ -778,8 +786,10 @@ class slow_metric_finder(base):
         for row in reader:
             if len(row) == 5 and row[0] == all_name:
                 target = all_name
-            elif len(row) >= 7 and int_expr.match(row[1]) and int_expr.match(row[2]):
-                target = ','.join(row[0:3])
+            elif len(row) >= 8:
+                target = row[3] # name field is populated in BED target entry
+            elif len(row) == 7 and int_expr.match(row[1]) and int_expr.match(row[2]):
+                target = ','.join(row[0:3]) # no name in BED entry; use chrom,start,end
             else:
                 msg = "Cannot parse target in bedtools output: '"+str(row)+"'"
                 self.logger.error(msg)
@@ -794,13 +804,14 @@ class slow_metric_finder(base):
                 raise
             target_sizes[target] = target_size
             by_target[target] = by_target.get(target, 0) + depth*bases
+            if target == all_name:
+                coverage_hist[depth] = bases
         for target in target_sizes.keys():
-            coverage = float(by_target[target]) / target_sizes[target]
-            by_target[target] = round(coverage, self.FINE_PRECISION)
+            by_target[target] = float(by_target[target]) / target_sizes[target] # not rounded for JSON
         total = by_target[all_name]
         del by_target[all_name]
         self.logger.debug("Found bedtools coverage by target")
-        return (total, by_target)
+        return (total, by_target, coverage_hist)
 
     def evaluate_custom_metrics(self):
         [metrics, ur_stats, start_points] = self.process_bam_file()

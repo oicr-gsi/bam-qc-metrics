@@ -1,8 +1,9 @@
 {
-    "alignment reference": "/home/iain/data/reference/hg19.fa",
+    "alignment reference": "/home/ibancarz/data/reference/hg19.fa",
     "average read length": 101,
     "barcode": "NoIndex",
     "bases mapped": 8082020,
+    "coverage histogram": {},
     "coverage per target": {},
     "deleted bases": 458,
     "hard clip bases": 0,
