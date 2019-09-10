@@ -1,27 +1,33 @@
 CHANGELOG
 =========
 
-Unreleased
-----------
+v0.1.7: 2019-09-10
+------------------
+
+Complete set of metrics and JSON output schema for first production release.
+
+Enhancements/bugfixes may be needed before production release, but metrics should not change.
 
 Fixed:
 - GP-2055 Run without error if `--target` not given
 
 Added:
-- GP-2045 Implementation of additional bedtools metrics
 - GP-2048 Downsampling to exact number of reads
 - Command-line options `--all-reads` and `--sample` control sample level
-- Default number of reads to sample is 1 million
-- Downsampling has no effect if fewer than 1 million reads present
+- Default number of reads to sample is approximately 1.1 million
+- Downsampling has no effect if fewer than 1.1 million reads present
+- Number of reads actually sampled is approximate, due to limitation of samtools
 - GP-2057 Logging and profiling
 - Command-line options for `--log` and `--profile`
 - `--verbose` and `--debug` options set the log level
 - Option to set random seed, with updated tests
+- GP-2045 Implementation of additional bedtools metrics
 - GP-2093 Bedtools coverage depth metrics
 - Additional metrics: Total coverage, coverage per target, target size, coverage histogram
 
 Changed:
 - GP-2095 Improved tmpdir handling; log and cleanup on fatal error
+- GP-2099 Update diff script for changes to JSON format
 
 v0.1.6: 2019-08-16
 ------------------
