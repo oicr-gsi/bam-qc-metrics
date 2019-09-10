@@ -20,6 +20,9 @@ Added:
 - GP-2093 Bedtools coverage depth metrics
 - Additional metrics: Total coverage, coverage per target, target size, coverage histogram
 
+Changed:
+- GP-2095 Improved tmpdir handling; log and cleanup on fatal error
+
 v0.1.6: 2019-08-16
 ------------------
 

@@ -112,9 +112,18 @@ class bam_qc(base):
         self.slow_metrics = None
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
         self.unmapped_excluded_reads = None
+        # find metrics; if an error occurs, do logging and cleanup before exit
+        try:
+            self._find_metrics(config[self.CONFIG_KEY_BAM])
+        except Exception as e:
+            self.logger.exception("Unexpected error: {0}".format(e))
+            self.cleanup()
+            raise
+
+    def _find_metrics(self, input_bam_path):
         # apply quality filter (if any); get input path for downsampling
         self.logger.info("Started bam_qc processing")
-        result = self.apply_mapq_filter(config[self.CONFIG_KEY_BAM])
+        result = self.apply_mapq_filter(input_bam_path)
         (fast_finder_input_path, self.qual_fail_reads, self.unmapped_excluded_reads) = result
         # find 'fast' metrics on full dataset -- after filtering, before downsampling
         self.logger.info("Started computing fast bam_qc metrics")
@@ -207,16 +216,15 @@ class bam_qc(base):
 
     def cleanup(self):
         """
+        Cleanup temporary files and directory created by bam-qc-metrics
+
         Temporary directory object (if any) will be automatically deleted when bam_qc object
-        is out of scope. This method allows explicit cleanup, eg. to avoid warnings in the
-        test harness.
+        is out of scope. This method allows explicit cleanup for:
+        - Avoiding warnings in the test harness
+        - Ensuring temporary file cleanup on error
         """
-        if self.tmp_object != None:
-            self.tmp_object.cleanup()
-            self.logger.info("Cleaned up default temporary directory %s" % self.tmpdir)
-        else:
-            self.logger.info("Omitting cleanup for user-specified "+\
-                             "temporary directory %s" % self.tmpdir)
+        self.tmp_object.cleanup()
+        self.logger.info("Cleaned up temporary directory %s" % self.tmpdir)
 
     def configure_logger(self, log_path=None):
         logger = logging.getLogger(__name__)
@@ -308,12 +316,9 @@ class bam_qc(base):
         metrics['HISTOGRAM'] = hist
         return metrics
 
-    def setup_tmpdir(self, tmpdir):
-        if tmpdir==None:
-            tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_')
-            tmpdir = tmp_object.name
-        else:
-            tmp_object = None
+    def setup_tmpdir(self, tmpdir_base=None):
+        tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_', dir=tmpdir_base)
+        tmpdir = tmp_object.name
         return (tmpdir, tmp_object)
 
     def update_unmapped_count(self, metrics):
