@@ -18,6 +18,9 @@ Added:
 - `--verbose` and `--debug` options set the log level
 - Option to set random seed, with updated tests
 
+Changed:
+- GP-2095 Improved tmpdir handling; log and cleanup on fatal error
+
 v0.1.6: 2019-08-16
 ------------------
 
