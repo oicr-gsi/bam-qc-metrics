@@ -115,8 +115,8 @@ class bam_qc(base):
         # find metrics; if an error occurs, do logging and cleanup before exit
         try:
             self._find_metrics(config[self.CONFIG_KEY_BAM])
-        except:
-            self.logger.error("Unexpected error: %s", sys.exc_info()[0])
+        except Exception as e:
+            self.logger.exception("Unexpected error: {0}".format(e))
             self.cleanup()
             raise
 
