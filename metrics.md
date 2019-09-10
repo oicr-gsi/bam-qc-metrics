@@ -15,6 +15,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | --------------------------------|-------------------------|-------------------------|----|
 | alignment reference             |                         | input parameter         | N  |
 | average read length             |                         | samtools stats: RL      | N  |
+| bases per target                |                         | bedtools                | Y  |
 | barcode                         |                         | metadata                | N  |
 | bases mapped                    | aligned bases           | samtools stats: SN      | N  |
 | coverage per target             |                         | bedtools                | Y  |
@@ -83,7 +84,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | soft clip bases                 |                         | CIGAR                   | Y  |
 | target file                     |                         | input parameter         | N  |
 | target sizes                    |                         | bedtools                | Y  |
-| total coverage                  |                         | bedtools                | Y  |
+| total bases on target           |                         | bedtools                | Y  |
 | total reads                     |                         | samtools stats: SN      | N  |
 | total target size               | target size             | bedtools                | N  |
 | unmapped reads                  |                         | samtools stats: SN      | N  |
