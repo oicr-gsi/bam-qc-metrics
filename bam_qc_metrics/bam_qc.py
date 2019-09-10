@@ -743,27 +743,34 @@ class slow_metric_finder(base):
 
     def evaluate_bedtools_metrics(self):
         metrics = {}
+        number_of_targets_key = 'number of targets'
+        total_target_size_key = 'total target size'
+        reads_on_target_key = 'reads on target'
+        total_bases_on_target_key = 'total bases on target'
+        bases_per_target_key = 'bases per target'
+        target_sizes_key = 'target sizes'
+        coverage_histogram_key = 'coverage histogram'
         if self.target_path:
             bamBedTool = pybedtools.BedTool(self.bam_path)
             targetBedTool = pybedtools.BedTool(self.target_path)
-            metrics['number of targets'] = targetBedTool.count()
-            metrics['total target size'] = sum(len(f) for f in targetBedTool.features())
-            metrics['reads on target'] = len(bamBedTool.intersect(self.target_path))
+            metrics[number_of_targets_key] = targetBedTool.count()
+            metrics[total_target_size_key] = sum(len(f) for f in targetBedTool.features())
+            metrics[reads_on_target_key] = len(bamBedTool.intersect(self.target_path))
             result = self.evaluate_coverage(bamBedTool, targetBedTool)
             [total, by_target, target_sizes, coverage_hist] = result
-            metrics['total coverage'] = total
-            metrics['coverage per target'] = by_target
-            metrics['target sizes'] = target_sizes
-            metrics['coverage histogram'] = coverage_hist
+            metrics[total_bases_on_target_key] = total
+            metrics[bases_per_target_key] = by_target
+            metrics[target_sizes_key] = target_sizes
+            metrics[coverage_histogram_key] = coverage_hist
             self.logger.info("Found bedtools metrics")
         else:
-            metrics['number of targets'] = None
-            metrics['total target size'] = None
-            metrics['reads on target'] = None
-            metrics['total coverage'] = None
-            metrics['coverage per target'] = {}
-            metrics['target sizes'] = {}
-            metrics['coverage histogram'] = {}
+            metrics[number_of_targets_key] = None
+            metrics[total_target_size_key] = None
+            metrics[reads_on_target_key] = None
+            metrics[total_bases_on_target_key] = None
+            metrics[bases_per_target_key] = {}
+            metrics[target_sizes_key] = {}
+            metrics[coverage_histogram_key] = {}
             self.logger.info("No target path given, omitting bedtools metrics")
         return metrics
 
