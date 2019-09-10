@@ -17,6 +17,8 @@ Added:
 - Command-line options for `--log` and `--profile`
 - `--verbose` and `--debug` options set the log level
 - Option to set random seed, with updated tests
+- GP-2093 Bedtools coverage depth metrics
+- Additional metrics: Total coverage, coverage per target, target size, coverage histogram
 
 Changed:
 - GP-2095 Improved tmpdir handling; log and cleanup on fatal error
