@@ -7,7 +7,7 @@ Process a BAM file and write metrics and metadata in JSON format.
 
 ## Prerequisites
 
-The `bamtools` executable must be available on the current `PATH`. Note that version 2.28.0 of the statically compiled binary on Github has an inconsistent version number, which means it does not work with `pybedtools`. Instead it is necessary to download the tarball and compile the `bamtools` binary locally.
+The `bedtools` executable must be available on the current `PATH`. Note that version 2.28.0 of the statically compiled binary on Github has an inconsistent version number, which means it does not work with `pybedtools`. Instead it is necessary to download the tarball and compile the `bedtools` binary locally.
 
 ## Usage
 

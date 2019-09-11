@@ -12,6 +12,8 @@ class test(unittest.TestCase):
     def setUp(self):
         self.quality = 30
         self.insert_max = 1500
+        self.sample_level = 10000
+        self.sample_default = 1100000
         self.tmp = tempfile.TemporaryDirectory(prefix='bam_qc_test_')
         self.tmpdir = self.tmp.name
         self.testdir = os.path.dirname(os.path.realpath(__file__))
@@ -22,7 +24,9 @@ class test(unittest.TestCase):
         self.markdup_path_low_cover = os.path.join(self.datadir, 'marked_dup_metrics_low_cover.txt')
         self.target_path = os.path.join(self.datadir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.datadir, 'expected.json')
+        self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
+        self.expected_path_rs88 = os.path.join(self.datadir, 'expected_downsampled_rs88.json')
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         if os.path.exists(self.OICR_REF):
             self.reference = self.OICR_REF
@@ -34,13 +38,14 @@ class test(unittest.TestCase):
             print(msg, file=sys.stderr)
             self.reference = None
         self.n_as_mismatch = False
+        self.log_path = os.path.join(self.tmpdir, 'test.log')
+        self.debug = False
         self.verbose = False
         self.dummy_version = "0.0.0_TEST"
         self.workflow_version = self.dummy_version
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, out_path):
-        # default analysis parameters -- use for basic class and script tests
         with (open(out_path)) as f: output = json.loads(f.read())
         # do individual sanity checks on some variables
         # helps validate results if expected output JSON file has been changed
@@ -48,7 +53,7 @@ class test(unittest.TestCase):
             "inserted bases": 315,
             "reads per start point": 1.031,
             "readsMissingMDtags": 80020,
-            "sample rate": 1,
+            "sample level": self.sample_default,
             "total reads": 80020,
             "total target size": 527189,
         }
@@ -73,14 +78,17 @@ class test(unittest.TestCase):
     def test_default_analysis(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -92,17 +100,19 @@ class test(unittest.TestCase):
         qc.cleanup()
         
     def test_downsampled_analysis(self):
-        sample_rate = 10
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: sample_rate,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_level,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -116,9 +126,9 @@ class test(unittest.TestCase):
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
             "inserted bases": 315,
-            "reads per start point": 1.002, # downsampled
-            "readsMissingMDtags": 7874, # downsampled
-            "sample rate": sample_rate,
+            "reads per start point": 1.003, # downsampled
+            "readsMissingMDtags": 9762, # downsampled
+            "sample level": self.sample_level,
             "total reads": 80020,
             "total target size": 527189,
         }
@@ -147,14 +157,17 @@ class test(unittest.TestCase):
         # - FFQ/LFQ in samtools stats
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
             bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
             bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
             bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
             bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
             bam_qc.CONFIG_KEY_REFERENCE: self.reference,
-            bam_qc.CONFIG_KEY_SAMPLE_RATE: None,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
             bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
             bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
             bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
@@ -179,10 +192,41 @@ class test(unittest.TestCase):
         fast_finder = fast_metric_finder(self.bam_path,
                                          self.reference,
                                          self.insert_max,
-                                         self.n_as_mismatch)
+                                         self.n_as_mismatch,
+                                         qc.logger)
         fq_result = fast_finder.fq_stats([])
         fq_expected = ({},{})
         self.assertEqual(fq_expected, fq_result)
+        qc.cleanup()
+
+    def test_random_seed(self):
+        # test downsampling with a different random seed from the default
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: 88,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_level,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out_downsampled_88.json')
+        qc.write_output(out_path)
+        with (open(out_path)) as f: output = json.loads(f.read())
+        with (open(self.expected_path_rs88)) as f: expected = json.loads(f.read())
+        # do not test the alignment reference local path
+        del expected['alignment reference']
+        del output['alignment reference']
+        self.assertEqual(output, expected)
         qc.cleanup()
 
     def test_script(self):
@@ -204,6 +248,8 @@ class test(unittest.TestCase):
         ]
         if self.n_as_mismatch:
             args.append('--n-as-mismatch')
+        if self.debug:
+            args.append('--debug')
         if self.verbose:
             args.append('--verbose')
         result = subprocess.run(args)
@@ -219,7 +265,10 @@ class test(unittest.TestCase):
         # 'update' copies of the test files with a dummy package version
         # then check the dummy version has been written correctly
         data_dir = get_data_dir_path()
-        filenames = ['expected.json', 'expected_downsampled.json']
+        filenames = ['expected.json',
+                     'expected_downsampled.json',
+                     'expected_no_target.json',
+                     'expected_downsampled_rs88.json']
         temp_paths = []
         for name in filenames:
             dest = os.path.join(self.tmpdir, name)
@@ -230,7 +279,58 @@ class test(unittest.TestCase):
         for temp_path in temp_paths:
             with (open(temp_path)) as f: data = json.loads(f.read())
             self.assertEqual(data[updater.PACKAGE_VERSION_KEY], self.dummy_version)
-        
+
+    def test_without_target(self):
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_TARGET: None,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out.json')
+        qc.write_output(out_path)
+        with (open(out_path)) as f: output = json.loads(f.read())
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
+        expected_variables = {
+            "inserted bases": 315,
+            "reads per start point": 1.031,
+            "readsMissingMDtags": 80020,
+            "sample level": self.sample_default,
+            "total reads": 80020,
+            "total target size": None,
+        }
+        for key in expected_variables.keys():
+            expected = expected_variables[key]
+            got = output[key]
+            try:
+                self.assertEqual(expected, got)
+            except AssertionError:
+                print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
+                      file=sys.stderr)
+                raise
+        # reference path output depends on local filesystem
+        # make test portable by just checking the filename
+        self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
+        # now check all output data (aside from the reference path)
+        with (open(self.expected_no_target)) as f: expected = json.loads(f.read())
+        del output['alignment reference']
+        del expected['alignment reference']
+        self.assertEqual(output, expected)
+        qc.cleanup()
+
     def tearDown(self):
         self.tmp.cleanup()
 
