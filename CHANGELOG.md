@@ -1,6 +1,14 @@
 CHANGELOG
 =========
 
+v0.1.8: 2019-09-12
+------------------
+
+Fixed:
+- Bugfixes GP-2115
+- Correctly update ur_stats dictionaries
+- Run `samtools` in subprocess instead of `pysam.stats`; enables error handling
+
 v0.1.7: 2019-09-10
 ------------------
 

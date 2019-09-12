@@ -473,7 +473,7 @@ class fast_metric_finder(base):
             'reads unmapped': self.UNMAPPED_READS_KEY,
             'non-primary alignments': 'non primary reads',
         }
-        self.samtools_stats = pysam.stats(self.bam_path)
+        self.samtools_stats = self.run_samtools_stats([self.bam_path,], strict=True)
         self.metrics = self.evaluate_all_metrics()
         # find secondary stats -- not for JSON export, but used to calculate subsequent metrics
         self.max_read_length = self.evaluate_max_read_length()
@@ -522,7 +522,7 @@ class fast_metric_finder(base):
         Find mismatches by read using samtools stats with:
         -r to specify a reference and get mismatch counts
         -f/F to specify read1/read2/unknown
-        Use 'samtools view' to find unknown reads
+        Use 'samtools stts' to find unknown reads
         Inefficient, but simpler than custom processing of MD tags
 
         Reference may be None -- if so, return 3 empty dictionaries
@@ -530,15 +530,15 @@ class fast_metric_finder(base):
         mismatches = {}
         # find read using flags; unknown read is neither R1 nor R2
         if self.reference != None:
-            r1_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
-                                                          '-f', '64',
-                                                          self.bam_path))
-            r2_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
-                                                          '-f', '128',
-                                                          self.bam_path))
-            ur_mismatch = self.parse_mismatch(pysam.stats('-r', self.reference,
-                                                          '-F', '192',
-                                                          self.bam_path))
+            r1_mismatch = self.parse_mismatch(self.run_samtools_stats(['-r', self.reference,
+                                                                       '-f', '64',
+                                                                       self.bam_path]))
+            r2_mismatch = self.parse_mismatch(self.run_samtools_stats(['-r', self.reference,
+                                                                       '-f', '128',
+                                                                       self.bam_path]))
+            ur_mismatch = self.parse_mismatch(self.run_samtools_stats(['-r', self.reference,
+                                                                      '-F', '192',
+                                                                       self.bam_path]))
         else:
             r1_mismatch = {}
             r2_mismatch = {}
@@ -619,9 +619,12 @@ class fast_metric_finder(base):
     
     def parse_mismatch(self, samtools_stats):
         """
-        Input is the string returned by pysam.stats
+        Input is the string returned by 'samtools stats'
         Parse the mismatches by cycle; return an empty dictionary if no data found
         """
+        if samtools_stats == None:
+            self.logger.debug("None input to mismatch parser; returning empty dictionary")
+            return {}
         reader = csv.reader(
             filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
             delimiter="\t"
@@ -688,6 +691,35 @@ class fast_metric_finder(base):
             self.MAX_READ_LENGTH_KEY: self.max_read_length,
         }
         return summary
+
+    def run_samtools_stats(self, args, strict=False):
+        """
+        Requires samtools to be available on the PATH.
+
+        According to module help, pysam.stats() is supposed to raise an exception on non-zero exit
+        from samtools. But in some cases it exits without raising an exception. Instead, we run
+        samtools directly in a subprocess.
+        
+        args = list of arguments to `samtools stats`
+        """
+        samtools_args = ['samtools', 'stats']
+        samtools_args.extend(args)
+        stats_str = None
+        try:
+            stats_str = subprocess.run(samtools_args,
+                                       check=True,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE,
+                                       universal_newlines=True).stdout
+        except subprocess.CalledProcessError as cpe:
+            msg = "Failure running samtools stats: {0}".format(cpe)+\
+                  "\nError output:\n%s\n" % cpe.stderr.strip()
+            if strict:
+                self.logger.error(msg)
+                raise
+            else:
+                self.logger.warning(msg)
+        return stats_str
     
 class slow_metric_finder(base):
 
@@ -939,9 +971,12 @@ class slow_metric_finder(base):
             hist_str = subprocess.run(args,
                                       check=True,
                                       stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE,
                                       universal_newlines=True).stdout
         except subprocess.CalledProcessError as cpe:
-            self.logger.error("Failure running bedtools: {0}".format(cpe))
+            msg = "Failure running bedtools: {0}; ".format(cpe)+\
+                  "\nError output:\n%s\n" % cpe.stderr.strip()
+            self.logger.error(msg)
             raise
         return hist_str
 
@@ -977,19 +1012,15 @@ class slow_metric_finder(base):
 
     def update_ur_stats(self, ur_stats, read):
         """ Update the unknown-read stats for a pysam 'read' object """
+        lhk = self.LENGTH_HISTOGRAM_KEY
+        qhk = self.QUALITY_HISTOGRAM_KEY
         ur_stats[self.READ_COUNT_KEY] += 1
         ur_len = read.query_length
         ur_stats[self.LENGTH_TOTAL_KEY] += ur_len
-        if ur_len in ur_stats[self.LENGTH_HISTOGRAM_KEY]:
-            ur_stats[self.LENGTH_HISTOGRAM_KEY][ur_len] += 1
-        else:
-            ur_stats[self.LENGTH_HISTOGRAM_KEY][ur_len] += 1
+        ur_stats[lhk][ur_len] = ur_stats[lhk].get(ur_len, 0) + 1
         for i in range(read.query_length):
             q = read.query_qualities[i]
             ur_stats[self.QUALITY_BY_CYCLE_KEY][i+1] += q
             ur_stats[self.TOTAL_BY_CYCLE_KEY][i+1] += 1
-            if q in ur_stats[self.QUALITY_HISTOGRAM_KEY]:
-                ur_stats[self.QUALITY_HISTOGRAM_KEY][q] += 1
-            else:
-                ur_stats[self.QUALITY_HISTOGRAM_KEY][q] = 1
+            ur_stats[qhk][q] = ur_stats[qhk].get(q, 0) + 1
         return ur_stats
