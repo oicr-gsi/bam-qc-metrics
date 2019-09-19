@@ -1,6 +1,15 @@
 CHANGELOG
 =========
 
+v0.2.0: 2019-09-19
+------------------
+
+Increment minor version as we deploy bam-qc-metrics for production testing
+
+Fixed:
+- GP-2126 `VERSION` file installed to unexpected location
+- Move `VERSION` to `/etc/versions/bam_qc_metrics/VERSION` and find correctly from `__init__.py`
+
 v0.1.8: 2019-09-12
 ------------------
 
