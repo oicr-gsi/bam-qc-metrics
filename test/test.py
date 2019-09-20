@@ -75,6 +75,32 @@ class test(unittest.TestCase):
         del expected['alignment reference']
         self.assertEqual(output, expected)
 
+    def test_collate(self):
+        """Test the metadata collation script"""
+        relative_path = os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'collate_metadata.py')
+        script = os.path.realpath(relative_path)
+        out_path = os.path.join(self.tmpdir, 'metadata_out.json')
+        with (open(self.metadata_path)) as f: expected = json.loads(f.read())
+        args = [
+            script,
+            '--barcode', expected['barcode'],
+            '--instrument', expected['instrument'],
+            '--lane', expected['lane'],
+            '--library', expected['library'],
+            '--run-name', expected['run name'],
+            '--sample', expected['sample'],
+            '--out', out_path
+        ]
+        result = subprocess.run(args)
+        try:
+            result.check_returncode()
+        except subprocess.CalledProcessError:
+            print("STANDARD OUTPUT:", result.stdout, file=sys.stderr)
+            print("STANDARD ERROR:", result.stderr, file=sys.stderr)
+            raise
+        with (open(out_path)) as f: found = json.loads(f.read())
+        self.assertEqual(found, expected)
+        
     def test_default_analysis(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
