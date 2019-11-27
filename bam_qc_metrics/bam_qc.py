@@ -284,7 +284,7 @@ class bam_qc(base):
                 section += 1
             elif section == 4 and re.match("BIN\tVALUE", line):
                 section += 1
-            elif section == 4 and re.match("BIN\tCoverageMult\tall_sets\tnon_optical_sets", line):
+            elif section == 4 and re.match("BIN\tCoverageMult", line):
                 # picard2 histogram output
                 section += 1
             elif section == 5 and re.match("[0-9]+\.[0-9]+\t[0-9]+\.{0,1}[0-9]*", line):
