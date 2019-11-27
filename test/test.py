@@ -22,12 +22,14 @@ class test(unittest.TestCase):
         self.bam_path = os.path.join(self.datadir, 'neat_5x_EX_hg19_chr21.bam')
         self.markdup_path = os.path.join(self.datadir, 'marked_dup_metrics.txt')
         self.markdup_path_low_cover = os.path.join(self.datadir, 'marked_dup_metrics_low_cover.txt')
+        self.markdup_path_picard_2_21_2 = os.path.join(self.datadir, 'marked_dup_metrics_picard_2.21.2.txt')
         self.target_path = os.path.join(self.datadir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.datadir, 'expected.json')
         self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
         self.expected_path_rs88 = os.path.join(self.datadir, 'expected_downsampled_rs88.json')
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
+        self.expected_picard_2_21_2 = os.path.join(self.datadir, 'expected_picard_2.21.2.json')
         if os.path.exists(self.OICR_REF):
             self.reference = self.OICR_REF
         elif os.path.exists(self.LOCAL_REF):
@@ -45,8 +47,8 @@ class test(unittest.TestCase):
         self.workflow_version = self.dummy_version
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
-    def assert_default_output_ok(self, out_path):
-        with (open(out_path)) as f: output = json.loads(f.read())
+    def assert_default_output_ok(self, actual_path, expected_path):
+        with (open(actual_path)) as f: output = json.loads(f.read())
         # do individual sanity checks on some variables
         # helps validate results if expected output JSON file has been changed
         expected_variables = {
@@ -70,7 +72,7 @@ class test(unittest.TestCase):
         # make test portable by just checking the filename
         self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
         # now check all output data (aside from the reference path)
-        with (open(self.expected_path)) as f: expected = json.loads(f.read())
+        with (open(expected_path)) as f: expected = json.loads(f.read())
         del output['alignment reference']
         del expected['alignment reference']
         self.assertEqual(output, expected)
@@ -96,7 +98,31 @@ class test(unittest.TestCase):
         qc = bam_qc(config)
         out_path = os.path.join(self.tmpdir, 'out.json')
         qc.write_output(out_path)
-        self.assert_default_output_ok(out_path)
+        self.assert_default_output_ok(out_path, self.expected_path)
+        qc.cleanup()
+
+    def test_default_analysis_picard_2_21_2(self):
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path_picard_2_21_2,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out.json')
+        qc.write_output(out_path)
+        self.assert_default_output_ok(out_path, self.expected_picard_2_21_2)
         qc.cleanup()
         
     def test_downsampled_analysis(self):
@@ -259,7 +285,7 @@ class test(unittest.TestCase):
             print("STANDARD OUTPUT:", result.stdout, file=sys.stderr)
             print("STANDARD ERROR:", result.stderr, file=sys.stderr)
             raise
-        self.assert_default_output_ok(out_path)
+        self.assert_default_output_ok(out_path, self.expected_path)
 
     def test_version_updater(self):
         # 'update' copies of the test files with a dummy package version

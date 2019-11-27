@@ -1,6 +1,14 @@
 CHANGELOG
 =========
 
+v0.2.1: 2019-11-26
+------------------
+
+Add support for picard 2.21.2 MarkDuplicates metrics histogram input.
+
+Added:
+- GR-883 Support picard 2.21.2 input
+
 v0.2.0: 2019-09-19
 ------------------
 

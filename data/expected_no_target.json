@@ -407,7 +407,7 @@
     "mismatched bases": 0,
     "non primary reads": 0,
     "number of targets": null,
-    "package version": "0.2.0",
+    "package version": "0.2.1",
     "paired end": true,
     "paired reads": 80020,
     "pairsMappedAbnormallyFar": 0,
