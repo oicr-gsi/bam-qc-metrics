@@ -1,6 +1,14 @@
 CHANGELOG
 =========
 
+v0.2.2: 2019-12-03
+------------------
+
+Add support for picard MarkDuplicates metrics input that is missing ROI histogram.
+
+Added:
+- GR-908 Support missing ROI histogram
+
 v0.2.1: 2019-11-26
 ------------------
 
