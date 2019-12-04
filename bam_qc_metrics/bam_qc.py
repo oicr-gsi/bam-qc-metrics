@@ -287,6 +287,9 @@ class bam_qc(base):
             elif section == 4 and re.match("BIN\tCoverageMult", line):
                 # picard2 histogram output
                 section += 1
+            elif section == 4:
+                # no histogram output detected - skip processing of section 5
+                break
             elif section == 5 and re.match("[0-9]+\.[0-9]+\t[0-9]+\.{0,1}[0-9]*", line):
                 terms = re.split("\t", line)
                 # JSON doesn't allow numeric dictionary keys, so hist_bin is stringified in output
@@ -316,7 +319,8 @@ class bam_qc(base):
                 metrics[keys[i]] = values[i]
             else:
                 metrics[keys[i]] = int(values[i])
-        metrics['HISTOGRAM'] = hist
+        if hist:
+            metrics['HISTOGRAM'] = hist
         return metrics
 
     def setup_tmpdir(self, tmpdir_base=None):
