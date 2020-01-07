@@ -11,86 +11,87 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 
 ## Summary of fields
 
-| Name                            | Former name             | Source                  | DS |
-| --------------------------------|-------------------------|-------------------------|----|
-| alignment reference             |                         | input parameter         | N  |
-| average read length             |                         | samtools stats: RL      | N  |
-| bases per target                |                         | bedtools                | Y  |
-| barcode                         |                         | metadata                | N  |
-| bases mapped                    | aligned bases           | samtools stats: SN      | N  |
-| coverage per target             |                         | bedtools                | Y  |
-| coverage histogram              |                         | bedtools                | Y  |
-| deleted bases                   |                         | samtools stats: ID      | N  |
-| hard clip bases                 |                         | CIGAR                   | Y  |
-| insert max                      |                         | input parameter         | N  |
-| insert size average             | insert mean             | samtools stats: SN      | N  |
-| insert size histogram           | insert histogram        | samtools stats: IS      | N  |
-| insert size standard deviation  | insert stdev            | samtools stats: SN      | N  |
-| inserted bases                  |                         | samtools stats: ID      | N  |
-| instrument                      |                         | metadata                | N  |
-| lane                            |                         | metadata                | N  |
-| library                         |                         | metadata                | N  |
-| mapped reads                    |                         | samtools stats: SN      | N  |
-| mark duplicates                 |                         | Picard MarkDuplicates   | N  |
-| mismatched bases                | mismatch bases          | samtools stats: SN      | N  |
-| non primary reads               |                         | samtools stats: SN      | N  |
-| number of targets               |                         | bedtools                | N  |
-| package version                 |                         | package version file    | N  |
-| paired end                      | number of ends          | samtools stats: SN      | N  |
-| paired reads                    |                         | samtools stats: SN      | N  |
-| pairsMappedAbnormallyFar        |                         | insert size histogram   | Y  |
-| pairsMappedToDifferentChr       |                         | samtools stats: SN      | N  |
-| properly paired reads           |                         | samtools stats: SN      | N  |
-| qual cut                        |                         | input parameter         | N  |
-| qual fail reads                 |                         | samtools view           | N  |
-| read 1 aligned by cycle         |                         | CIGAR                   | Y  |
-| read 1 average length           |                         | samtools stats: FRL     | N  |
-| read 1 deletion by cycle        |                         | CIGAR                   | Y  |
-| read 1 hard clip by cycle       |                         | CIGAR                   | Y  |
-| read 1 insertion by cycle       |                         | CIGAR                   | Y  |
-| read 1 length histogram         |                         | samtools stats: FRL     | N  |
-| read 1 mismatch by cycle        |                         | samtools stats: MPC     | N  |
-| read 1 quality by cycle         |                         | samtools stats: FFQ     | N  |
-| read 1 quality histogram        |                         | samtools stats: FFQ     | N  |
-| read 1 soft clip by cycle       |                         | CIGAR                   | Y  |
-| read 2 aligned by cycle         |                         | CIGAR                   | Y  |
-| read 2 average length           |                         | samtools stats: LRL     | N  |
-| read 2 deletion by cycle        |                         | CIGAR                   | Y  |
-| read 2 hard clip by cycle       |                         | CIGAR                   | Y  |
-| read 2 insertion by cycle       |                         | CIGAR                   | Y  |
-| read 2 length histogram         |                         | samtools stats: LRL     | N  |
-| read 2 mismatch by cycle        |                         | samtools stats: MPC     | N  |
-| read 2 quality by cycle         |                         | samtools stats: LFQ     | N  |
-| read 2 quality histogram        |                         | samtools stats: LFQ     | N  |
-| read 2 soft clip by cycle       |                         | CIGAR                   | Y  |
-| read ? aligned by cycle         |                         | CIGAR                   | Y  |
-| read ? average length           |                         | CIGAR                   | Y  |
-| read ? deletion by cycle        |                         | CIGAR                   | Y  |
-| read ? hard clip by cycle       |                         | CIGAR                   | Y  |
-| read ? insertion by cycle       |                         | CIGAR                   | Y  |
-| read ? length histogram         |                         | CIGAR                   | Y  |
-| read ? mismatch by cycle        |                         | samtools stats: MPC     | N  |
-| read ? quality by cycle         |                         | CIGAR                   | Y  |
-| read ? quality histogram        |                         | CIGAR                   | Y  |
-| read ? soft clip by cycle       |                         | CIGAR                   | Y  |
-| reads mapped and paired         | mate unmapped reads     | samtools stats: SN      | N  |
-| reads on target                 |                         | bedtools                | Y  |
-| reads per start point           |                         | RNAME/POS fields        | Y  |
-| readsMissingMDtags              |                         | CIGAR                   | Y  |
-| run name                        |                         | metadata                | N  |
-| sample                          |                         | metadata                | N  |
-| sample level                    |                         | input parameter         | N  |
-| sample total                    |                         | samtools view -s        | N  |
-| soft clip bases                 |                         | CIGAR                   | Y  |
-| target file                     |                         | input parameter         | N  |
-| target sizes                    |                         | bedtools                | Y  |
-| total bases on target           |                         | bedtools                | Y  |
-| total reads                     |                         | samtools stats: SN      | N  |
-| total target size               | target size             | bedtools                | N  |
-| unmapped reads                  |                         | samtools stats: SN      | N  |
-| workflow version                |                         | input parameter         | N  |
+| Name                            | Former name          | Source                  | DS | WFM |
+| --------------------------------|----------------------|-------------------------|----|-----|
+| alignment reference             |                      | input parameter         | N  |  Y  |
+| average read length             |                      | samtools stats: RL      | N  |  Y  |
+| bases per target                |                      | bedtools                | Y  |  N  |
+| barcode                         |                      | metadata                | N  |  N  |
+| bases mapped                    | aligned bases        | samtools stats: SN      | N  |  Y  |
+| coverage per target             |                      | bedtools                | Y  |  N  |
+| coverage histogram              |                      | bedtools                | Y  |  N  |
+| deleted bases                   |                      | samtools stats: ID      | N  |  Y  |
+| hard clip bases                 |                      | CIGAR                   | Y  |  N  |
+| insert max                      |                      | input parameter         | N  |  Y  |
+| insert size average             | insert mean          | samtools stats: SN      | N  |  Y  |
+| insert size histogram           | insert histogram     | samtools stats: IS      | N  |  Y  |
+| insert size standard deviation  | insert stdev         | samtools stats: SN      | N  |  Y  |
+| inserted bases                  |                      | samtools stats: ID      | N  |  Y  |
+| instrument                      |                      | metadata                | N  |  N  |
+| lane                            |                      | metadata                | N  |  N  |
+| library                         |                      | metadata                | N  |  N  |
+| mapped reads                    |                      | samtools stats: SN      | N  |  Y  |
+| mark duplicates                 |                      | Picard MarkDuplicates   | N  |  N  |
+| mismatched bases                | mismatch bases       | samtools stats: SN      | N  |  Y  |
+| non primary reads               |                      | samtools stats: SN      | N  |  Y  |
+| number of targets               |                      | bedtools                | N  |  N  |
+| package version                 |                      | package version file    | N  |  Y  |
+| paired end                      | number of ends       | samtools stats: SN      | N  |  Y  |
+| paired reads                    |                      | samtools stats: SN      | N  |  Y  |
+| pairsMappedAbnormallyFar        |                      | insert size histogram   | Y  |  Y  |
+| pairsMappedToDifferentChr       |                      | samtools stats: SN      | N  |  Y  |
+| properly paired reads           |                      | samtools stats: SN      | N  |  Y  |
+| qual cut                        |                      | input parameter         | N  |  N  |
+| qual fail reads                 |                      | samtools view           | N  |  N  |
+| read 1 aligned by cycle         |                      | CIGAR                   | Y  |  N  |
+| read 1 average length           |                      | samtools stats: FRL     | N  |  Y  |
+| read 1 deletion by cycle        |                      | CIGAR                   | Y  |  N  |
+| read 1 hard clip by cycle       |                      | CIGAR                   | Y  |  N  |
+| read 1 insertion by cycle       |                      | CIGAR                   | Y  |  N  |
+| read 1 length histogram         |                      | samtools stats: FRL     | N  |  Y  |
+| read 1 mismatch by cycle        |                      | samtools stats: MPC     | N  |  Y  |
+| read 1 quality by cycle         |                      | samtools stats: FFQ     | N  |  Y  |
+| read 1 quality histogram        |                      | samtools stats: FFQ     | N  |  Y  |
+| read 1 soft clip by cycle       |                      | CIGAR                   | Y  |  N  |
+| read 2 aligned by cycle         |                      | CIGAR                   | Y  |  N  |
+| read 2 average length           |                      | samtools stats: LRL     | N  |  Y  |
+| read 2 deletion by cycle        |                      | CIGAR                   | Y  |  N  |
+| read 2 hard clip by cycle       |                      | CIGAR                   | Y  |  N  |
+| read 2 insertion by cycle       |                      | CIGAR                   | Y  |  N  |
+| read 2 length histogram         |                      | samtools stats: LRL     | N  |  Y  |
+| read 2 mismatch by cycle        |                      | samtools stats: MPC     | N  |  Y  |
+| read 2 quality by cycle         |                      | samtools stats: LFQ     | N  |  Y  |
+| read 2 quality histogram        |                      | samtools stats: LFQ     | N  |  Y  |
+| read 2 soft clip by cycle       |                      | CIGAR                   | Y  |  N  |
+| read ? aligned by cycle         |                      | CIGAR                   | Y  |  N  |
+| read ? average length           |                      | CIGAR                   | Y  |  N  |
+| read ? deletion by cycle        |                      | CIGAR                   | Y  |  N  |
+| read ? hard clip by cycle       |                      | CIGAR                   | Y  |  N  |
+| read ? insertion by cycle       |                      | CIGAR                   | Y  |  N  |
+| read ? length histogram         |                      | CIGAR                   | Y  |  N  |
+| read ? mismatch by cycle        |                      | samtools stats: MPC     | N  |  Y  |
+| read ? quality by cycle         |                      | CIGAR                   | Y  |  N  |
+| read ? quality histogram        |                      | CIGAR                   | Y  |  N  |
+| read ? soft clip by cycle       |                      | CIGAR                   | Y  |  N  |
+| reads mapped and paired         | mate unmapped reads  | samtools stats: SN      | N  |  Y  |
+| reads on target                 |                      | bedtools                | Y  |  N  |
+| RPSP (DEPRECATED)               |                      | RNAME/POS fields        | Y  |  N  |
+| readsMissingMDtags              |                      | CIGAR                   | Y  |  N  |
+| run name                        |                      | metadata                | N  |  N  |
+| sample                          |                      | metadata                | N  |  N  |
+| sample level                    |                      | input parameter         | N  |  N  |
+| sample total                    |                      | samtools view -s        | N  |  N  |
+| soft clip bases                 |                      | CIGAR                   | Y  |  N  |
+| target file                     |                      | input parameter         | N  |  N  |
+| target sizes                    |                      | bedtools                | Y  |  N  |
+| total bases on target           |                      | bedtools                | Y  |  N  |
+| total reads                     |                      | samtools stats: SN      | N  |  Y  |
+| total target size               | target size          | bedtools                | N  |  N  |
+| unmapped reads                  |                      | samtools stats: SN      | N  |  Y  |
+| workflow version                |                      | input parameter         | N  |  N  |
 
-- The DS column indicates which metrics are affected by downsampling (if any).
+- The 'DS' column indicates which metrics are affected by downsampling (if any).
+- The 'WFM' column indicates which fields are in the subset output by `write_fast_metrics.py`.
 
 ## General notes on data sources
 
@@ -103,6 +104,8 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 There are two possible filter mechanisms in BamQC: _downsampling_ and _quality filtering_.
 
 If both are in effect, quality filtering is applied first.
+
+Neither filter is supported by the `write_fast_metrics.py` script.
 
 ### Speed considerations
 

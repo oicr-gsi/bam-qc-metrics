@@ -11,7 +11,11 @@ The `bedtools` executable must be available on the current `PATH`. Note that ver
 
 ## Usage
 
-Run the script `bin/run_bam_qc.py` with `--help` for instructions.
+There are two command-line scripts:
+- `bin/run_bam_qc.py` to run all metrics
+- `bin/write_fast_metrics.py` to run a faster subset of metrics, eg. for RNASeqQC
+
+Run either script with `--help` for instructions.
 
 ## Tests
 

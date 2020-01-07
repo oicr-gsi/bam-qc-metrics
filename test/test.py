@@ -2,7 +2,8 @@
 
 import json, os, re, shutil, subprocess, sys, tempfile, unittest
 
-from bam_qc_metrics import bam_qc, fast_metric_finder, get_data_dir_path, version_updater
+from bam_qc_metrics import bam_qc, fast_metric_finder, fast_metric_writer, \
+    get_data_dir_path, version_updater
 
 class test(unittest.TestCase):
 
@@ -26,6 +27,7 @@ class test(unittest.TestCase):
         self.markdup_path_picard2_no_histogram = os.path.join(self.datadir, 'marked_dup_metrics_picard2_no_histogram.txt')
         self.target_path = os.path.join(self.datadir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.datadir, 'expected.json')
+        self.expected_fast_metrics = os.path.join(self.datadir, 'expected_fast_metrics.json')
         self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
         self.expected_path_rs88 = os.path.join(self.datadir, 'expected_downsampled_rs88.json')
@@ -50,17 +52,30 @@ class test(unittest.TestCase):
         self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, actual_path, expected_path):
-        with (open(actual_path)) as f: output = json.loads(f.read())
-        # do individual sanity checks on some variables
-        # helps validate results if expected output JSON file has been changed
         expected_variables = {
+            "deleted bases": 458,
+            "insert size average": 249.8,
             "inserted bases": 315,
-            "reads per start point": 1.031,
             "readsMissingMDtags": 80020,
             "sample level": self.sample_default,
             "total reads": 80020,
             "total target size": 527189,
         }
+        self.assert_output_ok(actual_path, expected_path, expected_variables)
+
+    def assert_fast_metric_output_ok(self, actual_path, expected_path):
+        expected_variables = {
+            "deleted bases": 458,
+            "insert size average": 249.8,
+            "inserted bases": 315,
+            "total reads": 80020,
+        }
+        self.assert_output_ok(actual_path, expected_path, expected_variables)
+
+    def assert_output_ok(self, actual_path, expected_path, expected_variables):
+        with (open(actual_path)) as f: output = json.loads(f.read())
+        # do individual sanity checks on some variables
+        # helps validate results if expected output JSON file has been changed
         for key in expected_variables.keys():
             expected = expected_variables[key]
             got = output[key]
@@ -203,6 +218,52 @@ class test(unittest.TestCase):
         self.assertEqual(output, expected)
         qc.cleanup()
 
+    def test_fast_metric_script(self):
+        # test the fast metric command-line script
+        filename = 'write_fast_metrics.py'
+        relative_path = os.path.join(os.path.dirname(__file__), os.pardir, 'bin', filename)
+        script = os.path.realpath(relative_path)
+        out_path = os.path.join(self.tmpdir, 'fast_metric_script_out.json')
+        args = [
+            script,
+            '--bam', self.bam_path,
+            '--insert-max', str(self.insert_max),
+            '--out', out_path,
+            '--reference', self.reference,
+        ]
+        if self.n_as_mismatch:
+            args.append('--n-as-mismatch')
+        if self.debug:
+            args.append('--debug')
+        if self.verbose:
+            args.append('--verbose')
+        result = subprocess.run(args)
+        try:
+            result.check_returncode()
+        except subprocess.CalledProcessError:
+            print("STANDARD OUTPUT:", result.stdout, file=sys.stderr)
+            print("STANDARD ERROR:", result.stderr, file=sys.stderr)
+            raise
+        self.assertTrue(os.path.exists(out_path))
+        self.assert_fast_metric_output_ok(out_path, self.expected_fast_metrics)
+
+    def test_fast_metric_writer(self):
+        # test the standalone fast_metric_writer class
+        config =  {
+            fast_metric_writer.CONFIG_KEY_BAM: self.bam_path,
+            fast_metric_writer.CONFIG_KEY_DEBUG: self.debug,
+            fast_metric_writer.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            fast_metric_writer.CONFIG_KEY_LOG: self.log_path,
+            fast_metric_writer.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            fast_metric_writer.CONFIG_KEY_REFERENCE: self.reference,
+            fast_metric_writer.CONFIG_KEY_VERBOSE: self.verbose,
+        }
+        fmw = fast_metric_writer(config)
+        out_path = os.path.join(self.tmpdir, 'out_fast_metrics.json')
+        fmw.write_output(out_path)
+        self.assertTrue(os.path.exists(out_path))
+        self.assert_fast_metric_output_ok(out_path, self.expected_fast_metrics)
+
     def test_missing_inputs(self):
         # test possible missing inputs:
         # - ESTIMATED_LIBRARY_SIZE in mark duplicates text
@@ -281,7 +342,7 @@ class test(unittest.TestCase):
         self.assertEqual(output, expected)
         qc.cleanup()
 
-    def test_script(self):
+    def test_main_script(self):
         relative_path = os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'run_bam_qc.py')
         script = os.path.realpath(relative_path)
         out_path = os.path.join(self.tmpdir, 'script_out.json')
@@ -319,6 +380,7 @@ class test(unittest.TestCase):
         data_dir = get_data_dir_path()
         filenames = ['expected.json',
                      'expected_downsampled.json',
+                     'expected_fast_metrics.json',
                      'expected_no_target.json',
                      'expected_downsampled_rs88.json']
         temp_paths = []

@@ -1,6 +1,16 @@
 CHANGELOG
 =========
 
+Unreleased
+----------
+
+Added:
+- GR-986 Run a fast subset of metrics for RNASeqQC
+- New command-line script `write_fast_metrics.py`
+- Shared functionality refactored into `base` and `validator` classes
+- Updated tests and documentation
+
+
 v0.2.2: 2019-12-03
 ------------------
 

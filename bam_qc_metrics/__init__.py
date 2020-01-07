@@ -1,5 +1,5 @@
 
-from .bam_qc import bam_qc, fast_metric_finder, version_updater
+from .bam_qc import bam_qc, fast_metric_finder, fast_metric_writer, validator, version_updater
 
 # 'base' and 'fast_metric_finder' classes are exported for tests
 # 'version_updater' class is exported for update_test_data_version.py
