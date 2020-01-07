@@ -2,8 +2,21 @@
 
 """Classes to compute BAM QC metrics"""
 
+import csv
+import json
+import logging
+import math
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+import pybedtools
+import pysam
+
 import bam_qc_metrics
-import csv, json, logging, os, re, pybedtools, pysam, subprocess, sys, tempfile
+
 
 class base_constants(object):
     """
@@ -345,6 +358,8 @@ class bam_qc(base):
         return metadata
     
     def read_mark_dup(self, input_path):
+
+        # scrape metrics file
         if input_path == None:
             return self.DEFAULT_MARK_DUPLICATES_METRICS
         section = 0
@@ -357,55 +372,155 @@ class bam_qc(base):
             line_count += 1
             line = line.strip()
             if re.match('## METRICS CLASS\s.*picard\.sam\.DuplicationMetrics$', line):
+                # DuplicationMetrics section start
                 section += 1
             elif section == 1:
+                # DuplicationMetrics header
                 keys = re.split("\t", line)
                 section += 1
-            elif section == 2:
-                values = re.split("\t", line)
+            elif section == 2 and line.strip() == '':
+                # DuplicationMetrics section end
                 section += 1
+            elif section == 2:
+                # DuplicationMetrics record
+                library_values = re.split("\t", line)
+                values.append(library_values)
             elif section == 3 and re.match('## HISTOGRAM', line):
+                # histogram start
                 section += 1
             elif section == 4 and re.match("BIN\tVALUE", line):
+                # picard1 histogram header
                 section += 1
             elif section == 4 and re.match("BIN\tCoverageMult", line):
-                # picard2 histogram output
+                # picard2 histogram header
                 section += 1
             elif section == 4:
                 # no histogram output detected - skip processing of section 5
                 break
             elif section == 5 and re.match("[0-9]+\.[0-9]+\t[0-9]+\.{0,1}[0-9]*", line):
+                # histogram record
                 terms = re.split("\t", line)
                 # JSON doesn't allow numeric dictionary keys, so hist_bin is stringified in output
                 # but rounding removes the trailing '.0'
                 hist_bin = round(float(terms[0])) if re.search('\.0$', terms[0]) else terms[0]
                 hist[hist_bin] = float(terms[1])
             elif re.match('#', line) and section < 4 or line == '':
+                # skip processing other new lines and comment blocks
                 continue
             else:
                 params = (input_path, section, line_count)
                 msg = "Failed to parse duplicate metrics path %s, section %d, line %d" % params
                 self.logger.error(msg)
                 raise ValueError(msg)
-        if len(keys) == len(values) + 1 and keys[-1] == 'ESTIMATED_LIBRARY_SIZE':
-            # field is empty (no trailing \t) for low coverage; append a default value
-            values.append(0)
-        elif len(keys) != len(values):
-            # otherwise, mismatched key/value totals are an error
-            msg = "Numbers of keys and values in %s do not match" % input_path
-            self.logger.error(msg)
-            raise ValueError(msg)
+
+        # parse library duplication metrics
+        library_metrics = []
+        aggregate_metrics = {}
+        for value in values:
+
+            # sanitize
+            if len(keys) == len(value) + 1 and keys[-1] == 'ESTIMATED_LIBRARY_SIZE':
+                # field is empty (no trailing \t) for low coverage; append a default value
+                value.append(0)
+            elif len(keys) != len(value):
+                # otherwise, mismatched key/value totals are an error
+                msg = "Numbers of keys and values in %s do not match" % input_path
+                self.logger.error(msg)
+                raise ValueError(msg)
+
+            # parse
+            metrics = {}
+            for i in range(len(keys)):
+                if keys[i] == 'PERCENT_DUPLICATION':
+                    metrics[keys[i]] = float(value[i])
+                elif keys[i] == 'LIBRARY':
+                    metrics[keys[i]] = value[i]
+                else:
+                    metrics[keys[i]] = int(value[i])
+            library_metrics.append(metrics)
+
+            # aggregate metrics
+            for k, v in metrics.items():
+                if k in ['LIBRARY','PERCENT_DUPLICATION', 'ESTIMATED_LIBRARY_SIZE']:
+                    # metrics that can not be aggregated
+                    continue
+                else:
+                    aggregate_metrics[k] = aggregate_metrics.get(k, 0) + v
+
         metrics = {}
-        for i in range(len(keys)):
-            if keys[i] == 'PERCENT_DUPLICATION':
-                metrics[keys[i]] = float(values[i])
-            elif keys[i] == 'LIBRARY':
-                metrics[keys[i]] = values[i]
+        if len(library_metrics) == 1:
+            metrics.update(library_metrics[0])
+        else:
+            # multiple library metric records - use aggregate metrics and add library metric records to LIBRARY_METRICS
+
+            # calculate "derived fields" (see https://github.com/broadinstitute/picard/blob/78ea24466d9bcab93db89f22e6a6bf64d0ad7782/src/main/java/picard/sam/DuplicationMetrics.java#L102)
+            if aggregate_metrics['UNPAIRED_READS_EXAMINED'] + aggregate_metrics['READ_PAIRS_EXAMINED'] != 0:
+                aggregate_metrics['PERCENT_DUPLICATION'] = round(
+                    (aggregate_metrics['UNPAIRED_READ_DUPLICATES'] + aggregate_metrics['READ_PAIR_DUPLICATES'] * 2)
+                    /
+                    (aggregate_metrics['UNPAIRED_READS_EXAMINED'] + aggregate_metrics['READ_PAIRS_EXAMINED'] * 2), 5)
             else:
-                metrics[keys[i]] = int(values[i])
+                aggregate_metrics['PERCENT_DUPLICATION'] = 0.0
+
+            aggregate_metrics['ESTIMATED_LIBRARY_SIZE'] = math.trunc(self.estimate_library_size(
+                aggregate_metrics['READ_PAIRS_EXAMINED'] - aggregate_metrics['READ_PAIR_OPTICAL_DUPLICATES'],
+                aggregate_metrics['READ_PAIRS_EXAMINED'] - aggregate_metrics['READ_PAIR_DUPLICATES']))
+
+            aggregate_metrics['LIBRARY'] = 'AGGREGATE'
+
+            metrics.update(aggregate_metrics)
+            metrics['LIBRARY_METRICS'] = library_metrics
+
         if hist:
             metrics['HISTOGRAM'] = hist
+
         return metrics
+
+    @staticmethod
+    def estimate_library_size(read_pairs, unique_read_pairs):
+        """
+        NOTE: This function is directly based off of Picards estimateLibrarySize method
+        See: https://github.com/broadinstitute/picard/blob/78ea24466d9bcab93db89f22e6a6bf64d0ad7782/src/main/java/picard/sam/DuplicationMetrics.java#L135
+
+        Estimates the size of a library based on the number of paired end molecules observed
+        and the number of unique pairs observed.
+
+        Based on the Lander-Waterman equation that states:
+        C/X = 1 - exp( -N/X )
+        where
+        X = number of distinct molecules in library
+        N = number of read pairs
+        C = number of distinct fragments observed in read pairs
+        """
+
+        # Method that is used in the computation of estimated library size
+        f = lambda x, c, n: c / x - 1 + math.exp(-n / x)
+
+        read_pair_duplicates = read_pairs - unique_read_pairs
+        if read_pairs > 0 and read_pair_duplicates > 0:
+            m = 1.0
+            M = 100.0
+
+            if unique_read_pairs >= read_pairs or f(m * unique_read_pairs, unique_read_pairs, read_pairs) < 0:
+                raise Exception("Invalid values for pairs and unique pairs: " + read_pairs + ", " + unique_read_pairs)
+
+            # find value of M, large enough to act as other side for bisection method
+            while f(M * unique_read_pairs, unique_read_pairs, read_pairs) > 0:
+                M *= 10.0
+
+            # use bisection method (no more than 40 times) to find solution
+            for i in range(40):
+                r = (m + M) / 2.0;
+                u = f(r * unique_read_pairs, unique_read_pairs, read_pairs);
+                if u == 0:
+                    break
+                elif u > 0:
+                    m = r
+                elif u < 0:
+                    M = r
+            return unique_read_pairs * (m + M) / 2.0
+        else:
+            return 0 # rather than null/None, we return 0 as default
 
     def setup_tmpdir(self, tmpdir_base=None):
         tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_', dir=tmpdir_base)
