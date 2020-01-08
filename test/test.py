@@ -378,17 +378,12 @@ class test(unittest.TestCase):
         # 'update' copies of the test files with a dummy package version
         # then check the dummy version has been written correctly
         data_dir = get_data_dir_path()
-        filenames = ['expected.json',
-                     'expected_downsampled.json',
-                     'expected_fast_metrics.json',
-                     'expected_no_target.json',
-                     'expected_downsampled_rs88.json']
+        updater = version_updater(self.tmpdir, self.dummy_version)
         temp_paths = []
-        for name in filenames:
+        for name in updater.get_filenames():
             dest = os.path.join(self.tmpdir, name)
             temp_paths.append(dest)
             shutil.copyfile(os.path.join(data_dir, name), dest)
-        updater = version_updater(self.tmpdir, self.dummy_version)
         updater.update_files()
         for temp_path in temp_paths:
             with (open(temp_path)) as f: data = json.loads(f.read())

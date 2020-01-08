@@ -21,6 +21,16 @@ Run either script with `--help` for instructions.
 
 Run `test/test.py` for Python tests.
 
+## Release procedure
+
+Before a release, the package version number in `./etc/versions/bam_qc_metrics/VERSION` must
+be updated.
+
+The package version number also appears in JSON output. The script
+`bin/update_test_data_version.py` updates the expected test data. Any new test output files
+must be added to the list for the update script, which is located in class
+`version_updater` in `bam-qc-metrics/bam_qc.py`.
+
 ## Metric notes
 
 See `metrics.md` for a detailed account of the metrics in use.

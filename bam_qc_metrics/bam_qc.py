@@ -136,6 +136,12 @@ class validator:
 
 class version_updater(base_constants):
 
+    FILENAMES =  ['expected.json',
+                  'expected_downsampled.json',
+                  'expected_fast_metrics.json',
+                  'expected_no_target.json',
+                  'expected_downsampled_rs88.json']
+
     def __init__(self, data_dir=None, version=None):
         if data_dir == None:
             self.data_dir = bam_qc_metrics.get_data_dir_path()
@@ -146,13 +152,11 @@ class version_updater(base_constants):
         else:
             self.package_version = version
 
+    def get_filenames(self):
+        return self.FILENAMES
+
     def update_files(self):
-        filenames = ['expected.json',
-                     'expected_downsampled.json',
-                     'expected_fast_metrics.json',
-                     'expected_no_target.json',
-                     'expected_downsampled_rs88.json']
-        for name in filenames:
+        for name in self.FILENAMES:
             json_path = os.path.join(self.data_dir, name)
             with open(json_path) as f:
                 data = json.loads(f.read())
