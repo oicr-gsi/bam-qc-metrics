@@ -388,22 +388,26 @@ class bam_qc(base):
             elif section == 3 and re.match('## HISTOGRAM', line):
                 # histogram start
                 section += 1
-            elif section == 4 and re.match("BIN\tVALUE", line):
-                # picard1 histogram header
-                section += 1
-            elif section == 4 and re.match("BIN\tCoverageMult", line):
-                # picard2 histogram header
-                section += 1
             elif section == 4:
-                # no histogram output detected - skip processing of section 5
+                # histogram header
+                histogram_keys = re.split("\t", line)
+                section += 1
+            elif section == 5 and line.strip() == '':
+                # histogram section end
                 break
-            elif section == 5 and re.match("[0-9]+\.[0-9]+\t[0-9]+\.{0,1}[0-9]*", line):
+            elif section == 5:
                 # histogram record
                 terms = re.split("\t", line)
                 # JSON doesn't allow numeric dictionary keys, so hist_bin is stringified in output
                 # but rounding removes the trailing '.0'
                 hist_bin = round(float(terms[0])) if re.search('\.0$', terms[0]) else terms[0]
-                hist[hist_bin] = float(terms[1])
+                for key_index in range(1, len(histogram_keys)): # start at second term (first term is hist_bin)
+                    hist_entry = hist.get(histogram_keys[key_index], {})
+                    if '.' in terms[key_index]:
+                        hist_entry[hist_bin] = float(terms[key_index])
+                    else:
+                        hist_entry[hist_bin] = int(terms[key_index])
+                    hist[histogram_keys[key_index]] = hist_entry
             elif re.match('#', line) and section < 4 or line == '':
                 # skip processing other new lines and comment blocks
                 continue

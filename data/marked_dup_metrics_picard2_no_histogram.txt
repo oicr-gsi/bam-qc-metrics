@@ -8,7 +8,3 @@ LIBRARY	UNPAIRED_READS_EXAMINED	READ_PAIRS_EXAMINED	SECONDARY_OR_SUPPLEMENTARY_R
 test	86	24909	819	610	0	4	4	0.00016	
 
 ## HISTOGRAM	java.lang.Double
-set_size	all_sets	optical_sets	non_optical_sets
-1.0	24901	0	24905
-2.0	4	4	0
-

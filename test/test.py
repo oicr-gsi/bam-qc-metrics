@@ -238,7 +238,6 @@ class test(unittest.TestCase):
         self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
         # now check all output data (aside from the reference)
         with (open(self.expected_path_downsampled)) as f: expected = json.loads(f.read())
-        del expected['alignment reference']
         del output['alignment reference']
         self.assertEqual(output, expected)
         qc.cleanup()
@@ -320,8 +319,9 @@ class test(unittest.TestCase):
         histogram_found = metrics_found['HISTOGRAM']
         histogram_expected = metrics_expected['HISTOGRAM']
         self.assertEqual(len(histogram_found), len(histogram_expected))
-        for key in histogram_found.keys():
-            self.assertEqual(histogram_found[key], histogram_expected[str(key)])
+        for histogram_type in histogram_found.keys():
+            for key in histogram_found[histogram_type]:
+                self.assertEqual(histogram_found[histogram_type][key], histogram_expected[histogram_type][str(key)])
         del metrics_found['HISTOGRAM']
         del metrics_expected['HISTOGRAM']
         self.assertEqual(metrics_found, metrics_expected)
@@ -461,7 +461,6 @@ class test(unittest.TestCase):
         # now check all output data (aside from the reference path)
         with (open(self.expected_no_target)) as f: expected = json.loads(f.read())
         del output['alignment reference']
-        del expected['alignment reference']
         self.assertEqual(output, expected)
         qc.cleanup()
 

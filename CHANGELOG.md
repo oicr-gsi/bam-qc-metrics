@@ -5,6 +5,7 @@ Unreleased
 ----------
 
 Added:
+- GP-2234 Export picard2 duplication metrics histograms
 - GR-968 Aggregate and export picard duplication metrics calculated from merged libraries.
 - GR-986 Run a fast subset of metrics for RNASeqQC
 - New command-line script `write_fast_metrics.py`
