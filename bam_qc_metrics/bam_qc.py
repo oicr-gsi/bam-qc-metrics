@@ -512,7 +512,7 @@ class bam_qc(base):
             for i in range(40):
                 r = (m + M) / 2.0;
                 u = f(r * unique_read_pairs, unique_read_pairs, read_pairs);
-                if u == 0:
+                if math.fabs(u) < sys.float_info.epsilon:
                     break
                 elif u > 0:
                     m = r
