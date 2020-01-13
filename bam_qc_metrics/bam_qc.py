@@ -430,13 +430,13 @@ class bam_qc(base):
 
             # parse
             metrics = {}
-            for i in range(len(keys)):
-                if keys[i] == 'PERCENT_DUPLICATION':
-                    metrics[keys[i]] = float(value[i])
+            for i, key in enumerate(keys):
+                if key == 'PERCENT_DUPLICATION':
+                    metrics[key] = float(value[i])
                 elif keys[i] == 'LIBRARY':
-                    metrics[keys[i]] = value[i]
+                    metrics[key] = value[i]
                 else:
-                    metrics[keys[i]] = int(value[i])
+                    metrics[key] = int(value[i])
             library_metrics.append(metrics)
 
             # aggregate metrics
