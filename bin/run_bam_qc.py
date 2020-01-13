@@ -3,89 +3,37 @@
 """Main script to compute BAM QC metrics"""
 
 import argparse, cProfile, os, re, sys, tempfile
-from bam_qc_metrics import bam_qc, read_package_version
+from bam_qc_metrics import bam_qc, read_package_version, validator
 
 DEFAULT_INSERT_MAX = 1500
 DEFAULT_SAMPLE_LEVEL = 1100000
-MINIMUM_SAMPLE_LEVEL = 1000
-
-def validate_input_file(path_arg):
-    valid = True
-    if not os.path.exists(path_arg):
-        sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
-        valid = False
-    elif not os.path.isfile(path_arg):
-        sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
-        valid = False
-    elif not os.access(path_arg, os.R_OK):
-        sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
-        valid = False
-    return valid
-
-def validate_output_dir(dir_path):
-    valid = True
-    if not os.path.exists(dir_path):
-        sys.stderr.write("ERROR: Directory %s does not exist.\n" % dir_path)
-        valid = False
-    elif not os.path.isdir(dir_path):
-        sys.stderr.write("ERROR: Path %s is not a directory.\n" % dir_path)
-        valid = False
-    elif not os.access(dir_path, os.W_OK):
-        sys.stderr.write("ERROR: Directory %s is not writable.\n" % dir_path)
-        valid = False
-    return valid
-
-def validate_positive_integer(arg, name):
-    param = None
-    valid = True
-    try:
-        param = int(arg)
-    except ValueError:
-        sys.stderr.write("ERROR: %s must be an integer.\n" % name)
-        valid = False
-    if param != None and param < 0:
-        sys.stderr.write("ERROR: %s cannot be negative.\n" % name)
-        valid = False
-    return valid
-
-def validate_sample_level(sample_all, sample_level):
-    # assumes sample_level is a positive integer (not None)
-    valid = True
-    if sample_all == True:
-        sys.stderr.write("ERROR: Cannot specify both --all-reads and --sample\n")
-        valid = False
-    elif int(sample_level) < MINIMUM_SAMPLE_LEVEL:
-        msg = "ERROR: Minimum sample level is %i reads." % MINIMUM_SAMPLE_LEVEL
-        msg = msg+" Increase the --sample argument, or use --all to omit downsampling.\n"
-        sys.stderr.write(msg)
-        valid = False
-    return valid
 
 def validate_args(args):
     valid = True
+
     # flip valid from True to False if a check is failed; never flip back to True
     if args.skip_below_mapq != None:
-        valid = validate_positive_integer(args.skip_below_mapq, 'Quality score')
+        valid = validator.validate_positive_integer(args.skip_below_mapq, 'Quality score')
     if args.insert_max != None:
-        valid = valid and validate_positive_integer(args.insert_max, 'Max insert size')
+        valid = valid and validator.validate_positive_integer(args.insert_max, 'Max insert size')
     if args.sample != None:
-        valid = valid and validate_positive_integer(args.sample, 'Downsampling level')
-        valid = validate_sample_level(args.all_reads, args.sample)
+        valid = valid and validator.validate_positive_integer(args.sample, 'Downsampling level')
+        valid = valid and validator.validate_sample_level(args.all_reads, args.sample)
     if args.bam == None:
         valid = False
         sys.stderr.write("ERROR: -b/--bam argument is required\n")
     for path_arg in (args.bam, args.target, args.metadata, args.mark_duplicates, args.reference):
         if path_arg != None:
-            valid = valid and validate_input_file(path_arg)
+            valid = valid and validator.validate_input_file(path_arg)
     if args.out != '-':
         # ugly but robust Python idiom to resolve path of parent directory
         parent_path = os.path.abspath(os.path.join(args.out, os.pardir))
-        valid = valid and validate_output_dir(parent_path)
+        valid = valid and validator.validate_output_dir(parent_path)
     if args.log_path != None:
         parent_path = os.path.abspath(os.path.join(args.log_path, os.pardir))
-        valid = valid and validate_output_dir(parent_path)
+        valid = valid and validator.validate_output_dir(parent_path)
     if args.temp_dir != None:
-        valid = valid and validate_output_dir(args.temp_dir)
+        valid = valid and validator.validate_output_dir(args.temp_dir)
     if args.workflow_version != None:
         # version string should be of the form 0.12.34 or (for instance) 0.12.34_alpha
         pattern = r'^[0-9]+\.[0-9]+\.[0-9]+\w*$'

@@ -11,11 +11,25 @@ The `bedtools` executable must be available on the current `PATH`. Note that ver
 
 ## Usage
 
-Run the script `bin/run_bam_qc.py` with `--help` for instructions.
+There are two command-line scripts:
+- `bin/run_bam_qc.py` to run all metrics
+- `bin/write_fast_metrics.py` to run a faster subset of metrics, eg. for RNASeqQC
+
+Run either script with `--help` for instructions.
 
 ## Tests
 
 Run `test/test.py` for Python tests.
+
+## Release procedure
+
+Before a release, the package version number in `./etc/versions/bam_qc_metrics/VERSION` must
+be updated.
+
+The package version number also appears in JSON output. The script
+`bin/update_test_data_version.py` updates the expected test data. Any new test output files
+must be added to the list for the update script, which is located in class
+`version_updater` in `bam-qc-metrics/bam_qc.py`.
 
 ## Metric notes
 

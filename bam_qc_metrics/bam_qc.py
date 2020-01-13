@@ -1,18 +1,19 @@
 #! /usr/bin/env python3
 
-"""Main class to compute BAM QC metrics"""
+"""Classes to compute BAM QC metrics"""
 
 import bam_qc_metrics
 import csv, json, logging, os, re, pybedtools, pysam, subprocess, sys, tempfile
 
-class base(object):
-
+class base_constants(object):
     """
     Class for shared constants
     """
 
     PRECISION = 1 # number of decimal places for rounded output
     FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
+    ALIGNMENT_REF_KEY = 'alignment reference'
+    INSERT_MAX_KEY = 'insert max'
     READ_1_LENGTH_KEY = 'read 1'
     READ_2_LENGTH_KEY = 'read 2'
     MAX_READ_LENGTH_KEY = 'max_read_length'
@@ -20,29 +21,138 @@ class base(object):
     UNMAPPED_READS_KEY = 'unmapped reads'
     PACKAGE_VERSION_KEY = 'package version'
 
+    # shared keys for config dictionary
+    CONFIG_KEY_BAM = 'bam'
+    CONFIG_KEY_DEBUG = 'debug'
+    CONFIG_KEY_INSERT_MAX = 'insert max'
+    CONFIG_KEY_LOG = 'log path'
+    CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
+    CONFIG_KEY_REFERENCE = 'reference'
+    CONFIG_KEY_VERBOSE = 'verbose'
 
-class version_updater(base):
 
-    def __init__(self, data_dir=None, version=None):
-        if data_dir == None:
-            self.data_dir = bam_qc_metrics.get_data_dir_path()
+class base(base_constants):
+    """
+    Class for methods shared between bam_qc and fast_metric_writer
+    """
+
+    def configure_logger(self, log_path=None, debug=False, verbose=False):
+        logger = logging.getLogger(__name__)
+        log_level = logging.WARN
+        if debug:
+            log_level = logging.DEBUG
+        elif verbose:
+            log_level = logging.INFO
+        logger.setLevel(log_level)
+        handler = None
+        if log_path==None:
+            handler = logging.StreamHandler()
         else:
-            self.data_dir = data_dir
-        if version==None:
-            self.package_version = bam_qc_metrics.read_package_version()
-        else:
-            self.package_version = version
+            handler = logging.FileHandler(log_path)
+        handler.setLevel(log_level)
+        formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s',
+                                      datefmt='%Y-%m-%d_%H:%M:%S')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
 
-    def update_files(self):
-        filenames = ['expected.json',
-                     'expected_downsampled.json',
-                     'expected_no_target.json',
-                     'expected_downsampled_rs88.json']
-        for name in filenames:
-            json_path = os.path.join(self.data_dir, name)
+    def validate_key_sets(self, found, expected):
+        """Compare set objects containing config keys; raise an informative error on mismatch"""
+        if not expected == found:
+            not_found_set = expected - found
+            not_found = not_found_set if len(not_found_set) > 0 else None
+            not_expected_set = found - expected
+            not_expected = not_expected_set if len(not_expected_set) > 0 else None
+            msg = "Config fields are not valid\n"
+            msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
+            msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
+            # do not log this message; logger not yet initialized
+            raise ValueError(msg)
+
+
+class validator:
+
+    """Utility functions for validating arguments to command-line scripts"""
+
+    MINIMUM_SAMPLE_LEVEL = 1000
+
+    @staticmethod
+    def validate_input_file(path_arg):
+        valid = True
+        if not os.path.exists(path_arg):
+            sys.stderr.write("ERROR: Path %s does not exist.\n" % path_arg)
+            valid = False
+        elif not os.path.isfile(path_arg):
+            sys.stderr.write("ERROR: Path %s is not a file.\n" % path_arg)
+            valid = False
+        elif not os.access(path_arg, os.R_OK):
+            sys.stderr.write("ERROR: Path %s is not readable.\n" % path_arg)
+            valid = False
+        return valid
+
+    @staticmethod
+    def validate_output_dir(dir_path):
+        valid = True
+        if not os.path.exists(dir_path):
+            sys.stderr.write("ERROR: Directory %s does not exist.\n" % dir_path)
+            valid = False
+        elif not os.path.isdir(dir_path):
+            sys.stderr.write("ERROR: Path %s is not a directory.\n" % dir_path)
+            valid = False
+        elif not os.access(dir_path, os.W_OK):
+            sys.stderr.write("ERROR: Directory %s is not writable.\n" % dir_path)
+            valid = False
+        return valid
+
+    @staticmethod
+    def validate_positive_integer(arg, name):
+        param = None
+        valid = True
+        try:
+            param = int(arg)
+        except ValueError:
+            sys.stderr.write("ERROR: %s must be an integer.\n" % name)
+            valid = False
+        if param != None and param < 0:
+            sys.stderr.write("ERROR: %s cannot be negative.\n" % name)
+            valid = False
+        return valid
+
+    @classmethod
+    def validate_sample_level(klass, sample_all, sample_level):
+        # assumes sample_level is a positive integer (not None)
+        valid = True
+        if sample_all == True:
+            sys.stderr.write("ERROR: Cannot specify both --all-reads and --sample\n")
+            valid = False
+        elif int(sample_level) < klass.MINIMUM_SAMPLE_LEVEL:
+            msg = "ERROR: Minimum sample level is %i reads." % klass.MINIMUM_SAMPLE_LEVEL
+            msg = msg+" Increase the --sample argument, or use --all to omit downsampling.\n"
+            sys.stderr.write(msg)
+            valid = False
+        return valid
+
+
+class version_updater(base_constants):
+
+    FILENAMES =  ['expected.json',
+                  'expected_downsampled.json',
+                  'expected_fast_metrics.json',
+                  'expected_no_target.json',
+                  'expected_downsampled_rs88.json']
+
+    def __init__(self):
+       self.package_version = bam_qc_metrics.read_package_version()
+    
+    def get_filenames(self):
+        return self.FILENAMES
+
+    def update_files(self, data_dir, version):
+        for name in self.FILENAMES:
+            json_path = os.path.join(data_dir, name)
             with open(json_path) as f:
                 data = json.loads(f.read())
-            data[self.PACKAGE_VERSION_KEY] = self.package_version
+            data[self.PACKAGE_VERSION_KEY] = version
             out = open(json_path, 'w')
             out.write(json.dumps(data, sort_keys=True, indent=4))
             out.close()
@@ -50,20 +160,13 @@ class version_updater(base):
 
 class bam_qc(base):
 
-    CONFIG_KEY_BAM = 'bam'
-    CONFIG_KEY_DEBUG = 'debug'
-    CONFIG_KEY_INSERT_MAX = 'insert max'
-    CONFIG_KEY_LOG = 'log path'
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
-    CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
     CONFIG_KEY_RANDOM_SEED = 'random seed'
-    CONFIG_KEY_REFERENCE = 'reference'
     CONFIG_KEY_SAMPLE = 'sample'
     CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
     CONFIG_KEY_TARGET = 'target'
     CONFIG_KEY_TEMP_DIR = 'temp dir'
-    CONFIG_KEY_VERBOSE = 'verbose'
     CONFIG_KEY_WORKFLOW_VERSION = 'workflow version'
     DEFAULT_MARK_DUPLICATES_METRICS =  {
         "ESTIMATED_LIBRARY_SIZE": None,
@@ -90,9 +193,11 @@ class bam_qc(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
-        self.debug = config[self.CONFIG_KEY_DEBUG] # enable logging first in case of warnings
-        self.verbose = config[self.CONFIG_KEY_VERBOSE]
-        self.logger = self.configure_logger(config[self.CONFIG_KEY_LOG])
+        self.logger = self.configure_logger(
+            config[self.CONFIG_KEY_LOG],
+            config[self.CONFIG_KEY_DEBUG],
+            config[self.CONFIG_KEY_VERBOSE]
+        )
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
@@ -132,7 +237,7 @@ class bam_qc(base):
                                          self.expected_insert_max,
                                          self.n_as_mismatch,
                                          self.logger)
-        self.fast_metrics = self.update_unmapped_count(fast_finder.metrics)
+        self.fast_metrics = self.update_unmapped_count(fast_finder.get_metrics())
         self.logger.info("Finished computing fast bam_qc metrics")
         # apply downsampling (if any)
         if self.sample_level != None:
@@ -225,27 +330,6 @@ class bam_qc(base):
         """
         self.tmp_object.cleanup()
         self.logger.info("Cleaned up temporary directory %s" % self.tmpdir)
-
-    def configure_logger(self, log_path=None):
-        logger = logging.getLogger(__name__)
-        if self.debug:
-            log_level = logging.DEBUG
-        elif self.verbose:
-            log_level = logging.INFO
-        else:
-            log_level = logging.WARN
-        logger.setLevel(log_level)
-        handler = None
-        if log_path==None:
-            handler = logging.StreamHandler()
-        else:
-            handler = logging.FileHandler(log_path)
-        handler.setLevel(log_level)
-        formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s',
-                                      datefmt='%Y-%m-%d_%H:%M:%S')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        return logger
 
     def mapq_filter_is_active(self):
         return self.skip_below_mapq != None and self.skip_below_mapq > 0
@@ -365,16 +449,7 @@ class bam_qc(base):
             self.CONFIG_KEY_WORKFLOW_VERSION
         ])
         found = set(config.keys())
-        if not expected == found:
-            not_found_set = expected - found
-            not_found = not_found_set if len(not_found_set) > 0 else None
-            not_expected_set = found - expected
-            not_expected = not_expected_set if len(not_expected_set) > 0 else None
-            msg = "Config fields are not valid\n"
-            msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
-            msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
-            # do not log this message; logger not yet initialized
-            raise ValueError(msg)
+        self.validate_key_sets(found, expected)
 
     def write_downsampled_bam(self, bam_path, sample_level, total_reads):
         """
@@ -419,8 +494,8 @@ class bam_qc(base):
             output[key] = self.fast_metrics.get(key)
         for key in self.slow_metrics.keys():
             output[key] = self.slow_metrics.get(key)
-        output['alignment reference'] = self.reference
-        output['insert max'] = self.expected_insert_max
+        output[self.ALIGNMENT_REF_KEY] = self.reference
+        output[self.INSERT_MAX_KEY] = self.expected_insert_max
         output['mark duplicates'] = self.mark_duplicates_metrics
         output['qual cut'] = self.skip_below_mapq
         output['qual fail reads'] = self.qual_fail_reads
@@ -441,7 +516,7 @@ class bam_qc(base):
         self.logger.debug("Wrote JSON output to %s" % dest)
 
 
-class fast_metric_finder(base):
+class fast_metric_finder(base_constants):
 
     """
     Find "fast" metric types which can be evaluated before downsampling
@@ -555,6 +630,9 @@ class fast_metric_finder(base):
         mismatches['read ? mismatch by cycle'] = ur_mismatch
         self.logger.debug("Found mismatches by cycle")
         return mismatches
+
+    def get_metrics(self):
+        return self.metrics
 
     def fq_stats(self, rows):
         """
@@ -727,8 +805,71 @@ class fast_metric_finder(base):
             else:
                 self.logger.warning(msg)
         return stats_str
-    
-class slow_metric_finder(base):
+
+class fast_metric_writer(base):
+    """
+    Wrapper for the fast_metric_finder class, to read parameters, set up logging, and write JSON.
+    Enables fast metrics to be computed as a standalone action (eg. for RNASeqQC).
+    """
+
+    def __init__(self, config):
+        self.validate_config_fields(config)
+        # set up logging
+        self.logger = self.configure_logger(
+            config[self.CONFIG_KEY_LOG],
+            config[self.CONFIG_KEY_DEBUG],
+            config[self.CONFIG_KEY_VERBOSE]
+        )
+        # set other instance variables
+        self.reference = config[self.CONFIG_KEY_REFERENCE]
+        self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
+        self.package_version = bam_qc_metrics.read_package_version()
+        # find metrics; if an error occurs, do logging before exit
+        self.logger.info("Started bam qc fast metric processing")
+        try:
+            fast_finder = fast_metric_finder(config[self.CONFIG_KEY_BAM],
+                                             self.reference,
+                                             self.expected_insert_max,
+                                             config[self.CONFIG_KEY_N_AS_MISMATCH],
+                                             self.logger)
+            self.metrics = fast_finder.get_metrics()
+        except Exception as e:
+            self.logger.exception("Unexpected error: {0}".format(e))
+            raise
+        self.logger.info("Finished bam qc fast metric processing")
+
+    def validate_config_fields(self, config):
+        """ Validate keys of the config dictionary for __init__ """
+        expected = set([
+            self.CONFIG_KEY_BAM,
+            self.CONFIG_KEY_DEBUG,
+            self.CONFIG_KEY_INSERT_MAX,
+            self.CONFIG_KEY_LOG,
+            self.CONFIG_KEY_N_AS_MISMATCH,
+            self.CONFIG_KEY_REFERENCE,
+            self.CONFIG_KEY_VERBOSE,
+        ])
+        found = set(config.keys())
+        self.validate_key_sets(found, expected)
+
+    def write_output(self, out_path):
+        if out_path != '-':
+            out_file = open(out_path, 'w')
+            dest = out_path
+        else:
+            out_file = sys.stdout
+            dest = 'STDOUT'
+        output = self.metrics.copy()
+        output[self.ALIGNMENT_REF_KEY] = self.reference
+        output[self.INSERT_MAX_KEY] = self.expected_insert_max
+        output[self.PACKAGE_VERSION_KEY] = self.package_version
+        print(json.dumps(output), file=out_file)
+        if out_path != '-':
+            out_file.close()
+        self.logger.debug("Wrote JSON output to %s" % dest)
+
+
+class slow_metric_finder(base_constants):
 
     """
     Find "slow" metric types which should be evaluated after downsampling (if any)
