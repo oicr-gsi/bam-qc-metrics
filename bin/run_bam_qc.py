@@ -18,7 +18,7 @@ def validate_args(args):
         valid = valid and validator.validate_positive_integer(args.insert_max, 'Max insert size')
     if args.sample != None:
         valid = valid and validator.validate_positive_integer(args.sample, 'Downsampling level')
-        valid = validator.validate_sample_level(args.all_reads, args.sample)
+        valid = valid and validator.validate_sample_level(args.all_reads, args.sample)
     if args.bam == None:
         valid = False
         sys.stderr.write("ERROR: -b/--bam argument is required\n")

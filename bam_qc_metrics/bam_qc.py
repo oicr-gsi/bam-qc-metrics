@@ -36,14 +36,13 @@ class base(base_constants):
     Class for methods shared between bam_qc and fast_metric_writer
     """
 
-    def configure_logger(self, log_path=None):
+    def configure_logger(self, log_path=None, debug=False, verbose=False):
         logger = logging.getLogger(__name__)
-        if self.debug:
+        log_level = logging.WARN
+        if debug:
             log_level = logging.DEBUG
-        elif self.verbose:
+        elif verbose:
             log_level = logging.INFO
-        else:
-            log_level = logging.WARN
         logger.setLevel(log_level)
         handler = None
         if log_path==None:
@@ -119,15 +118,15 @@ class validator:
             valid = False
         return valid
 
-    @staticmethod
-    def validate_sample_level(sample_all, sample_level):
+    @classmethod
+    def validate_sample_level(klass, sample_all, sample_level):
         # assumes sample_level is a positive integer (not None)
         valid = True
         if sample_all == True:
             sys.stderr.write("ERROR: Cannot specify both --all-reads and --sample\n")
             valid = False
-        elif int(sample_level) < MINIMUM_SAMPLE_LEVEL:
-            msg = "ERROR: Minimum sample level is %i reads." % MINIMUM_SAMPLE_LEVEL
+        elif int(sample_level) < klass.MINIMUM_SAMPLE_LEVEL:
+            msg = "ERROR: Minimum sample level is %i reads." % klass.MINIMUM_SAMPLE_LEVEL
             msg = msg+" Increase the --sample argument, or use --all to omit downsampling.\n"
             sys.stderr.write(msg)
             valid = False
@@ -163,7 +162,6 @@ class bam_qc(base):
 
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
-    CONFIG_KEY_N_AS_MISMATCH = 'n as mismatch'
     CONFIG_KEY_RANDOM_SEED = 'random seed'
     CONFIG_KEY_SAMPLE = 'sample'
     CONFIG_KEY_SKIP_BELOW_MAPQ = 'skip below mapq'
@@ -195,9 +193,11 @@ class bam_qc(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # read instance variables from config
-        self.debug = config[self.CONFIG_KEY_DEBUG] # enable logging first in case of warnings
-        self.verbose = config[self.CONFIG_KEY_VERBOSE]
-        self.logger = self.configure_logger(config[self.CONFIG_KEY_LOG])
+        self.logger = self.configure_logger(
+            config[self.CONFIG_KEY_LOG],
+            config[self.CONFIG_KEY_DEBUG],
+            config[self.CONFIG_KEY_VERBOSE]
+        )
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
@@ -815,9 +815,11 @@ class fast_metric_writer(base):
     def __init__(self, config):
         self.validate_config_fields(config)
         # set up logging
-        self.debug = config[self.CONFIG_KEY_DEBUG]
-        self.verbose = config[self.CONFIG_KEY_VERBOSE]
-        self.logger = self.configure_logger(config[self.CONFIG_KEY_LOG])
+        self.logger = self.configure_logger(
+            config[self.CONFIG_KEY_LOG],
+            config[self.CONFIG_KEY_DEBUG],
+            config[self.CONFIG_KEY_VERBOSE]
+        )
         # set other instance variables
         self.reference = config[self.CONFIG_KEY_REFERENCE]
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]

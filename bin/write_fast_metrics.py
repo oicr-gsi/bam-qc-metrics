@@ -2,7 +2,7 @@
 
 """Script to compute faster BAM QC metrics derived from samtools stats"""
 
-import argparse, cProfile, os, re, sys, tempfile
+import argparse, os, sys
 from bam_qc_metrics import fast_metric_writer, read_package_version, validator
 
 DEFAULT_INSERT_MAX = 1500
