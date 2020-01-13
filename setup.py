@@ -14,7 +14,7 @@ with open(os.path.join(os.path.dirname(__file__), version_dir, version_filename)
 setup(
     name='bam-qc-metrics',
     version=package_version,
-    scripts=['bin/run_bam_qc.py', ],
+    scripts=['bin/run_bam_qc.py', 'bin/write_fast_metrics.py'],
     packages=[package_identifier],
     install_requires=['attrs', 'jsonschema', 'pybedtools', 'pyrsistent', 'pysam', 'six'],
     data_files=[(version_dir, [os.path.join(version_dir, version_filename)])],

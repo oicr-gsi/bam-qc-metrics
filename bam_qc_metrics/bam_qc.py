@@ -142,25 +142,18 @@ class version_updater(base_constants):
                   'expected_no_target.json',
                   'expected_downsampled_rs88.json']
 
-    def __init__(self, data_dir=None, version=None):
-        if data_dir == None:
-            self.data_dir = bam_qc_metrics.get_data_dir_path()
-        else:
-            self.data_dir = data_dir
-        if version==None:
-            self.package_version = bam_qc_metrics.read_package_version()
-        else:
-            self.package_version = version
-
+    def __init__(self):
+       self.package_version = bam_qc_metrics.read_package_version()
+    
     def get_filenames(self):
         return self.FILENAMES
 
-    def update_files(self):
+    def update_files(self, data_dir, version):
         for name in self.FILENAMES:
-            json_path = os.path.join(self.data_dir, name)
+            json_path = os.path.join(data_dir, name)
             with open(json_path) as f:
                 data = json.loads(f.read())
-            data[self.PACKAGE_VERSION_KEY] = self.package_version
+            data[self.PACKAGE_VERSION_KEY] = version
             out = open(json_path, 'w')
             out.write(json.dumps(data, sort_keys=True, indent=4))
             out.close()

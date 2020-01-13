@@ -2,8 +2,7 @@
 
 import json, os, re, shutil, subprocess, sys, tempfile, unittest
 
-from bam_qc_metrics import bam_qc, fast_metric_finder, fast_metric_writer, \
-    get_data_dir_path, version_updater
+from bam_qc_metrics import bam_qc, fast_metric_finder, fast_metric_writer, version_updater
 
 class test(unittest.TestCase):
 
@@ -377,14 +376,14 @@ class test(unittest.TestCase):
     def test_version_updater(self):
         # 'update' copies of the test files with a dummy package version
         # then check the dummy version has been written correctly
-        data_dir = get_data_dir_path()
-        updater = version_updater(self.tmpdir, self.dummy_version)
+        data_dir = self.datadir
+        updater = version_updater()
         temp_paths = []
         for name in updater.get_filenames():
             dest = os.path.join(self.tmpdir, name)
             temp_paths.append(dest)
             shutil.copyfile(os.path.join(data_dir, name), dest)
-        updater.update_files()
+        updater.update_files(self.tmpdir, self.dummy_version)
         for temp_path in temp_paths:
             with (open(temp_path)) as f: data = json.loads(f.read())
             self.assertEqual(data[updater.PACKAGE_VERSION_KEY], self.dummy_version)
