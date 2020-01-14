@@ -24,6 +24,7 @@ class test(unittest.TestCase):
         self.markdup_path_low_cover = os.path.join(self.datadir, 'marked_dup_metrics_low_cover.txt')
         self.markdup_path_picard2 = os.path.join(self.datadir, 'marked_dup_metrics_picard2.txt')
         self.markdup_path_picard2_no_histogram = os.path.join(self.datadir, 'marked_dup_metrics_picard2_no_histogram.txt')
+        self.markdup_path_picard2_multiple_libraries = os.path.join(self.datadir, 'marked_dup_metrics_picard2_multiple_libraries.txt')
         self.target_path = os.path.join(self.datadir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.datadir, 'expected.json')
         self.expected_fast_metrics = os.path.join(self.datadir, 'expected_fast_metrics.json')
@@ -33,6 +34,7 @@ class test(unittest.TestCase):
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         self.expected_picard2 = os.path.join(self.datadir, 'expected_picard2.json')
         self.expected_picard2_no_histogram = os.path.join(self.datadir, 'expected_picard2_no_histogram.json')
+        self.expected_picard2_multiple_libraries = os.path.join(self.datadir, 'expected_picard2_multiple_libraries.json')
         if os.path.exists(self.OICR_REF):
             self.reference = self.OICR_REF
         elif os.path.exists(self.LOCAL_REF):
@@ -164,7 +166,31 @@ class test(unittest.TestCase):
         qc.write_output(out_path)
         self.assert_default_output_ok(out_path, self.expected_picard2_no_histogram)
         qc.cleanup()
-        
+
+    def test_default_analysis_picard2_multiple_libraries(self):
+        config = {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path_picard2_multiple_libraries,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out.json')
+        qc.write_output(out_path)
+        self.assert_default_output_ok(out_path, self.expected_picard2_multiple_libraries)
+        qc.cleanup()
+
     def test_downsampled_analysis(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,

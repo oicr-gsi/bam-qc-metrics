@@ -5,6 +5,7 @@ Unreleased
 ----------
 
 Added:
+- GR-968 Aggregate and export picard duplication metrics calculated from merged libraries.
 - GR-986 Run a fast subset of metrics for RNASeqQC
 - New command-line script `write_fast_metrics.py`
 - Shared functionality refactored into `base` and `validator` classes
