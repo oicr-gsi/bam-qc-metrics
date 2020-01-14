@@ -4,6 +4,9 @@ CHANGELOG
 Unreleased
 ----------
 
+v0.2.3: 2020-01-14
+------------------
+
 Added:
 - GP-2234 Export picard2 duplication metrics histograms
 - GR-968 Aggregate and export picard duplication metrics calculated from merged libraries.
@@ -11,7 +14,6 @@ Added:
 - New command-line script `write_fast_metrics.py`
 - Shared functionality refactored into `base` and `validator` classes
 - Updated tests and documentation
-
 
 v0.2.2: 2019-12-03
 ------------------
