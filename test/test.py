@@ -19,6 +19,7 @@ class test(unittest.TestCase):
         self.testdir = os.path.dirname(os.path.realpath(__file__))
         self.datadir = os.path.realpath(os.path.join(self.testdir, '..', 'data'))
         self.metadata_path = os.path.join(self.datadir, 'metadata.json')
+        self.metadata_path_alternate = os.path.join(self.datadir, 'metadata_alternate.json')
         self.bam_path = os.path.join(self.datadir, 'neat_5x_EX_hg19_chr21.bam')
         self.markdup_path = os.path.join(self.datadir, 'marked_dup_metrics.txt')
         self.markdup_path_low_cover = os.path.join(self.datadir, 'marked_dup_metrics_low_cover.txt')
@@ -27,6 +28,7 @@ class test(unittest.TestCase):
         self.markdup_path_picard2_multiple_libraries = os.path.join(self.datadir, 'marked_dup_metrics_picard2_multiple_libraries.txt')
         self.target_path = os.path.join(self.datadir,'SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed')
         self.expected_path = os.path.join(self.datadir, 'expected.json')
+        self.expected_alternate_meta = os.path.join(self.datadir, 'expected_alternate_metadata.json')
         self.expected_fast_metrics = os.path.join(self.datadir, 'expected_fast_metrics.json')
         self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
@@ -50,7 +52,7 @@ class test(unittest.TestCase):
         self.verbose = False
         self.dummy_version = "0.0.0_TEST"
         self.workflow_version = self.dummy_version
-        self.maxDiff = None # uncomment to show the (very long) full output diff
+        #self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, actual_path, expected_path):
         expected_variables = {
@@ -95,6 +97,31 @@ class test(unittest.TestCase):
         del expected['alignment reference']
         self.assertEqual(output, expected)
 
+    def test_alternate_metadata(self):
+        # alternate metadata for merged BAM files
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path_alternate,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: self.quality,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE: self.sample_default,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out.json')
+        qc.write_output(out_path)
+        self.assert_default_output_ok(out_path, self.expected_alternate_meta)
+        qc.cleanup()
+        
     def test_default_analysis(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
