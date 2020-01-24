@@ -21,6 +21,8 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | coverage per target             |                      | bedtools                | Y  |  N  |
 | coverage histogram              |                      | bedtools                | Y  |  N  |
 | deleted bases                   |                      | samtools stats: ID      | N  |  Y  |
+| donor                           |                      | metadata                | N  |  N  |
+| group id                        |                      | metadata                | N  |  N  |
 | hard clip bases                 |                      | CIGAR                   | Y  |  N  |
 | insert max                      |                      | input parameter         | N  |  Y  |
 | insert size average             | insert mean          | samtools stats: SN      | N  |  Y  |
@@ -30,6 +32,7 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | instrument                      |                      | metadata                | N  |  N  |
 | lane                            |                      | metadata                | N  |  N  |
 | library                         |                      | metadata                | N  |  N  |
+| library design                  |                      | metadata                | N  |  N  |
 | mapped reads                    |                      | samtools stats: SN      | N  |  Y  |
 | mark duplicates                 |                      | Picard MarkDuplicates   | N  |  N  |
 | mismatched bases                | mismatch bases       | samtools stats: SN      | N  |  Y  |
@@ -84,6 +87,8 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 | soft clip bases                 |                      | CIGAR                   | Y  |  N  |
 | target file                     |                      | input parameter         | N  |  N  |
 | target sizes                    |                      | bedtools                | Y  |  N  |
+| tissue origin                   |                      | metadata                | N  |  N  |
+| tissue type                     |                      | metadata                | N  |  N  |
 | total bases on target           |                      | bedtools                | Y  |  N  |
 | total reads                     |                      | samtools stats: SN      | N  |  Y  |
 | total target size               | target size          | bedtools                | N  |  N  |
@@ -98,6 +103,16 @@ Some metrics have been renamed in the move from the old Perl to new Python imple
 - `samtools` and `bedtools` are wrapped by the Python packages `pysam` and `pybedtools`, respectively. (Exception: For coverage metrics, `bedtools` is called in a subprocess to circumvent a bug in `pybedtools`.)
 - `pysam` is also used for processing CIGAR strings.
 - `pairsMappedAbnormallyFar` is a secondary metric, computed from the insert size histogram, which in turn is derived from `samtools stats`. In this instance, 'abnormal' is defined by the `insert max` parameter.
+
+## Metadata
+
+The metadata fields are supplied as JSON input to the `run_bam_qc.py` script.
+
+Two sets of metadata fields are in use:
+- `['barcode', 'instrument', 'lane', 'library', 'run name', 'sample']` for lane-level BAM input
+- `['donor', 'group id', 'library design', 'tissue origin', 'tissue type']` for merged BAM input
+
+Metadata fields not appropriate for the given BAM input will appear in JSON output with a null value.
 
 ## Filtering
 

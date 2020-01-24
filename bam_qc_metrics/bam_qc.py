@@ -194,12 +194,19 @@ class bam_qc(base):
         "UNPAIRED_READ_DUPLICATES": None
     }
     METADATA_KEYS = [
+        # for un-merged BAM input
         'barcode',
         'instrument',
         'lane',
         'library',
         'run name',
-        'sample'
+        'sample',
+        # for merged BAM input
+        'donor',
+        'group id',
+        'library design',
+        'tissue origin',
+        'tissue type'
     ]
     DEFAULT_RANDOM_SEED = 42
 

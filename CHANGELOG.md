@@ -4,6 +4,12 @@ CHANGELOG
 Unreleased
 ----------
 
+v0.2.4: 2020-01-24
+------------------
+
+Added:
+- GP-2252 Additional metadata fields for merged BAM files
+
 v0.2.3: 2020-01-14
 ------------------
 
