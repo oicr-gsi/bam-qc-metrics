@@ -4676,7 +4676,7 @@
     "run name": "Simulated_Run",
     "sample": "Simulated_5X_chr21",
     "sample level": 10000,
-    "sample total": 9968,
+    "downsampled total": 9968,
     "soft clip bases": 0,
     "target file": "SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed",
     "target sizes": {

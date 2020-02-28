@@ -4,6 +4,10 @@ CHANGELOG
 Unreleased
 ----------
 
+- GP-2098 Sorted input for bedtools
+- GP-2295 Downsampled input BAM as argument
+- GP-2302 Filtered read totals in JSON output
+
 v0.2.4: 2020-01-24
 ------------------
 

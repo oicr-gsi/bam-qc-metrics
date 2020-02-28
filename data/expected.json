@@ -6783,7 +6783,7 @@
     "qual fail reads": 0,
     "package version": "0.2.4",
     "sample level": 1100000,
-    "sample total": null,
+    "downsampled total": null,
     "target file": "SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed",
     "workflow version": "0.0.0_TEST"
 }

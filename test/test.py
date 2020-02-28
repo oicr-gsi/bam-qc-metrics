@@ -18,6 +18,7 @@ class test(unittest.TestCase):
         self.tmpdir = self.tmp.name
         self.testdir = os.path.dirname(os.path.realpath(__file__))
         self.datadir = os.path.realpath(os.path.join(self.testdir, '..', 'data'))
+        self.downsampled_bam = None
         self.metadata_path = os.path.join(self.datadir, 'metadata.json')
         self.metadata_path_alternate = os.path.join(self.datadir, 'metadata_alternate.json')
         self.bam_path = os.path.join(self.datadir, 'neat_5x_EX_hg19_chr21.bam')
@@ -102,6 +103,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -126,6 +128,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -150,6 +153,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -174,6 +178,7 @@ class test(unittest.TestCase):
         config = {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -198,6 +203,7 @@ class test(unittest.TestCase):
         config = {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -222,6 +228,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -322,6 +329,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -369,6 +377,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -445,6 +454,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: None,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,

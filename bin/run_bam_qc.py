@@ -19,6 +19,12 @@ def validate_args(args):
     if args.sample != None:
         valid = valid and validator.validate_positive_integer(args.sample, 'Downsampling level')
         valid = valid and validator.validate_sample_level(args.all_reads, args.sample)
+    if args.downsampled_bam != None:
+        if args.all_reads != None or args.sample != None:
+            valid = False
+            sys.stderr.write("ERROR: -S/--downsampled-bam argument incompatible with "+\
+                             "-a/--all-reads or -s/--sample")
+        valid = valid and validator.validate_input_file(args.downsampled_bam)
     if args.bam == None:
         valid = False
         sys.stderr.write("ERROR: -b/--bam argument is required\n")
@@ -79,6 +85,9 @@ def main():
     parser.add_argument('-s', '--sample', metavar='INT',
                         help='Sample a total of INT reads from the BAM file, for input to slower '+\
                         'QC metrics. Defaults to 1.1 million. Incompatible with --all-reads.')
+    parser.add_argument('-S', '--downsampled-bam', metavar='PATH',
+                        help='Downsampled BAM file for input to slow QC metrics. Incompatible with '+\
+                        '--all-reads and --sample.')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional. If given, must be sorted in same order as BAM file. '+\
@@ -108,6 +117,7 @@ def main():
     config = {
         bam_qc.CONFIG_KEY_BAM: args.bam,
         bam_qc.CONFIG_KEY_DEBUG: args.debug,
+        bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: args.downsampled_bam,
         bam_qc.CONFIG_KEY_TARGET: args.target,
         bam_qc.CONFIG_KEY_INSERT_MAX: insert_max,
         bam_qc.CONFIG_KEY_LOG: args.log_path,
