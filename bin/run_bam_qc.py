@@ -20,7 +20,7 @@ def validate_args(args):
         valid = valid and validator.validate_positive_integer(args.sample, 'Downsampling level')
         valid = valid and validator.validate_sample_level(args.all_reads, args.sample)
     if args.downsampled_bam != None:
-        if args.all_reads != None or args.sample != None:
+        if args.all_reads or args.sample:
             valid = False
             sys.stderr.write("ERROR: -S/--downsampled-bam argument incompatible with "+\
                              "-a/--all-reads or -s/--sample")
@@ -110,7 +110,7 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     random_seed = None if args.random_seed == None else int(args.random_seed)
-    if args.all_reads:
+    if args.all_reads or args.downsampled_bam:
         sample = None
     else:
         sample = DEFAULT_SAMPLE_LEVEL if args.sample == None else int(args.sample)
