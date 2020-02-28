@@ -78,6 +78,17 @@ class test(unittest.TestCase):
         }
         self.assert_output_ok(actual_path, expected_path, expected_variables)
 
+    def assert_output_with_downsampled_input_ok(self, actual_path, expected_path):
+        expected_variables = {
+            "inserted bases": 315,
+            "reads per start point": 1.008, # downsampled
+            "readsMissingMDtags": 20000, # downsampled
+            "sample level": None,
+            "total reads": 80020,
+            "total target size": 527189,
+        }
+        self.assert_output_ok(actual_path, expected_path, expected_variables)
+
     def assert_output_ok(self, actual_path, expected_path, expected_variables):
         with (open(actual_path)) as f: output = json.loads(f.read())
         # do individual sanity checks on some variables
@@ -249,33 +260,8 @@ class test(unittest.TestCase):
         out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
         qc.write_output(out_path)
         self.assertTrue(os.path.exists(out_path))
-        with (open(out_path)) as f: output = json.loads(f.read())
-        # do individual sanity checks on some variables
-        # helps validate results if expected output JSON file has been changed
-        expected_variables = {
-            "inserted bases": 315,
-            "reads per start point": 1.008, # downsampled
-            "readsMissingMDtags": 20000, # downsampled
-            "sample level": None,
-            "total reads": 80020,
-            "total target size": 527189,
-        }
-        for key in expected_variables.keys():
-            expected = expected_variables[key]
-            got = output[key]
-            try:
-                self.assertEqual(expected, got)
-            except AssertionError:
-                print("\nFailed on metric '"+key+"': Expected", expected, ", got", got,
-                      file=sys.stderr)
-                raise
-        # reference path output depends on local filesystem
-        # make test portable by just checking the filename
-        self.assertTrue(re.search('/hg19.fa$', output['alignment reference']))
-        # now check all output data (aside from the reference)
-        with (open(self.expected_path_from_downsampled_input)) as f: expected = json.loads(f.read())
-        del output['alignment reference']
-        self.assertEqual(output, expected)
+        ep = self.expected_path_from_downsampled_input
+        self.assert_output_with_downsampled_input_ok(out_path, ep)
         qc.cleanup()
 
     def test_downsampling_analysis(self):
@@ -488,6 +474,39 @@ class test(unittest.TestCase):
             print("STANDARD ERROR:", result.stderr, file=sys.stderr)
             raise
         self.assert_default_output_ok(out_path, self.expected_path)
+
+    def test_main_script_downsampled_input(self):
+        relative_path = os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'run_bam_qc.py')
+        script = os.path.realpath(relative_path)
+        out_path = os.path.join(self.tmpdir, 'script_out.json')
+        args = [
+            script,
+            '--bam', self.bam_path,
+            '--downsampled-bam', self.downsampled_bam_nonempty,
+            '--target', self.target_path,
+            '--insert-max', str(self.insert_max),
+            '--metadata', self.metadata_path,
+            '--mark-duplicates', self.markdup_path,
+            '--out', out_path,
+            '--reference', self.reference,
+            '--temp-dir', self.tmpdir,
+            '--workflow-version', self.workflow_version
+        ]
+        if self.n_as_mismatch:
+            args.append('--n-as-mismatch')
+        if self.debug:
+            args.append('--debug')
+        if self.verbose:
+            args.append('--verbose')
+        result = subprocess.run(args)
+        try:
+            result.check_returncode()
+        except subprocess.CalledProcessError:
+            print("STANDARD OUTPUT:", result.stdout, file=sys.stderr)
+            print("STANDARD ERROR:", result.stderr, file=sys.stderr)
+            raise
+        ep = self.expected_path_from_downsampled_input
+        self.assert_output_with_downsampled_input_ok(out_path, ep)
 
     def test_version_updater(self):
         # 'update' copies of the test files with a dummy package version
