@@ -1,1 +1,12 @@
-{"sample":"Simulated_5X_chr21","library":"Simulated_5X_chr21","barcode":"NoIndex","instrument":"NEAT-genReads","run name":"Simulated_Run","lane":"1"}
+{
+    "sample": "Simulated_5X_chr21",
+    "library": "Simulated_5X_chr21",
+    "barcode": "NoIndex",
+    "instrument": "NEAT-genReads",
+    "run name": "Simulated_Run",
+    "lane": "1",
+    "total input reads meta": 83020,
+    "non-primary reads meta": 1200,
+    "unmapped reads meta": 1000,
+    "low-quality reads meta": 800
+}

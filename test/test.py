@@ -52,7 +52,7 @@ class test(unittest.TestCase):
         self.verbose = False
         self.dummy_version = "0.0.0_TEST"
         self.workflow_version = self.dummy_version
-        #self.maxDiff = None # uncomment to show the (very long) full output diff
+        self.maxDiff = None # uncomment to show the (very long) full output diff
 
     def assert_default_output_ok(self, actual_path, expected_path):
         expected_variables = {
