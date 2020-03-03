@@ -2726,7 +2726,7 @@
     "non primary reads": 0,
     "non-primary reads meta": 1200,
     "number of targets": 2085,
-    "package version": "0.2.4",
+    "package version": "0.2.5",
     "paired end": true,
     "paired reads": 80020,
     "pairsMappedAbnormallyFar": 0,
