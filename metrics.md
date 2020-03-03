@@ -157,11 +157,23 @@ For example, time taken to process a NovaSeq BAM file (22 GB, 545M reads) was as
 
 ### Downsampling
 
+#### Overview
+
 Downsampling, in which metrics are computed on a randomly selected subset of reads, may be applied for faster and more efficient data processing.
 
 If downsampling is in effect, metrics derived from CIGAR strings and bedtools are evaluated on the downsampled reads. The estimated value of the metric on the full dataset must be scaled accordingly. For example, if 500 million reads have been downsampled to 1 million, and the reported 'hard clip bases' is 250, there will be approximately 125,000 hard clip bases in the entire BAM file. Metrics derived directly from samtools will always be calculated on the full dataset, without downsampling. The `DS` column in the summary table records which metrics are affected by downsampling.
 
-Downsampling is carried out using `samtools view -s`. This method is fast and preserves read pairs, but does not allow sampling an exact number of reads, as it uses a probability of sampling rather than a fixed sample size. This is a [known issue](https://github.com/samtools/samtools/issues/955) with samtools and may be fixed at a later date. Alternatively, a workaround may be implemented in a subsequent version of `bam-qc-metrics`.
+`bam-qc-metrics` can either accept a separate downsampled file as input, or do its own downsampling on the main input BAM file.
+
+#### Previously downsampled input
+
+A previously downsampled BAM file may be provided to `bam-qc-metrics` using the `--downsampled-bam` option to `run_bam_qc.py`. The slow QC metrics will be run on the BAM file provided. This is helpful if downsampling has already been carried out for other tools such as Picard MarkDuplicates. It also allows downsampling to an exact number of reads, instead of the approximate method used by `bam-qc-metrics`.
+
+Note that there is no cross-checking as to whether the downsampled input is really a subset of the main input.
+
+#### Downsampling by bam-qc-metrics
+
+Alternatively, `bam-qc-metrics` can carry out its own downsampling using `samtools view -s`. This method is fast and preserves read pairs, but does not allow sampling an exact number of reads, as it uses a probability of sampling rather than a fixed sample size. This is a [known issue](https://github.com/samtools/samtools/issues/955) with samtools. A workaround suggested by the samtools developers will be implemented in the OICR [bamQC workflow](https://github.com/oicr-gsi/bam-qc).
 
 The default is downsampling to approximately 1.1 million reads, if the input BAM contains more than this number; and no downsampling otherwise. The default level was chosen so the downsampled file should contain at least 1 million reads. Downsampling can be deactivated, or a custom rate specified, using command-line options. In JSON output, `sample_level` is the target number of reads to downsample, and `sample_total` is the actual number of reads returned by samtools.
 

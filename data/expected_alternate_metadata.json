@@ -4690,7 +4690,6 @@
     "run name": null,
     "sample": null,
     "sample level": 1100000,
-    "sample total": null,
     "soft clip bases": 0,
     "target file": "SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed",
     "target sizes": {
@@ -6781,6 +6780,12 @@
         "chr21,9908286,9908406": 120,
         "chr21,9909256,9909376": 120
     },
+    "qual cut": 30,
+    "qual fail reads": 0,
+    "package version": "0.2.4",
+    "sample level": 1100000,
+    "downsampled total": null,
+    "target file": "SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed",
     "tissue origin": "LV-426",
     "tissue type": "Claw fragment",
     "total bases on target": 3607087,

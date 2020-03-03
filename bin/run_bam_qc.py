@@ -19,6 +19,12 @@ def validate_args(args):
     if args.sample != None:
         valid = valid and validator.validate_positive_integer(args.sample, 'Downsampling level')
         valid = valid and validator.validate_sample_level(args.all_reads, args.sample)
+    if args.downsampled_bam != None:
+        if args.all_reads or args.sample:
+            valid = False
+            sys.stderr.write("ERROR: -S/--downsampled-bam argument incompatible with "+\
+                             "-a/--all-reads or -s/--sample")
+        valid = valid and validator.validate_input_file(args.downsampled_bam)
     if args.bam == None:
         valid = False
         sys.stderr.write("ERROR: -b/--bam argument is required\n")
@@ -79,6 +85,9 @@ def main():
     parser.add_argument('-s', '--sample', metavar='INT',
                         help='Sample a total of INT reads from the BAM file, for input to slower '+\
                         'QC metrics. Defaults to 1.1 million. Incompatible with --all-reads.')
+    parser.add_argument('-S', '--downsampled-bam', metavar='PATH',
+                        help='Downsampled BAM file for input to slow QC metrics. Incompatible with '+\
+                        '--all-reads and --sample.')
     parser.add_argument('-t', '--target', metavar='PATH',
                         help='Path to target BED file, containing targets to calculate coverage '+\
                         'against. Optional. If given, must be sorted in same order as BAM file. '+\
@@ -101,13 +110,14 @@ def main():
     skip_below_mapq = None if args.skip_below_mapq == None else int(args.skip_below_mapq)
     insert_max = None if args.insert_max == None else int(args.insert_max)
     random_seed = None if args.random_seed == None else int(args.random_seed)
-    if args.all_reads:
+    if args.all_reads or args.downsampled_bam:
         sample = None
     else:
         sample = DEFAULT_SAMPLE_LEVEL if args.sample == None else int(args.sample)
     config = {
         bam_qc.CONFIG_KEY_BAM: args.bam,
         bam_qc.CONFIG_KEY_DEBUG: args.debug,
+        bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: args.downsampled_bam,
         bam_qc.CONFIG_KEY_TARGET: args.target,
         bam_qc.CONFIG_KEY_INSERT_MAX: insert_max,
         bam_qc.CONFIG_KEY_LOG: args.log_path,

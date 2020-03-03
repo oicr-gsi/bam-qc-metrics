@@ -18,9 +18,11 @@ class test(unittest.TestCase):
         self.tmpdir = self.tmp.name
         self.testdir = os.path.dirname(os.path.realpath(__file__))
         self.datadir = os.path.realpath(os.path.join(self.testdir, '..', 'data'))
+        self.bam_path = os.path.join(self.datadir, 'neat_5x_EX_hg19_chr21.bam')
+        self.downsampled_bam = None
+        self.downsampled_bam_nonempty = os.path.join(self.datadir, 'neat_5x_EX_hg19_chr21_downsampled.bam')
         self.metadata_path = os.path.join(self.datadir, 'metadata.json')
         self.metadata_path_alternate = os.path.join(self.datadir, 'metadata_alternate.json')
-        self.bam_path = os.path.join(self.datadir, 'neat_5x_EX_hg19_chr21.bam')
         self.markdup_path = os.path.join(self.datadir, 'marked_dup_metrics.txt')
         self.markdup_path_low_cover = os.path.join(self.datadir, 'marked_dup_metrics_low_cover.txt')
         self.markdup_path_picard2 = os.path.join(self.datadir, 'marked_dup_metrics_picard2.txt')
@@ -32,6 +34,7 @@ class test(unittest.TestCase):
         self.expected_fast_metrics = os.path.join(self.datadir, 'expected_fast_metrics.json')
         self.expected_no_target = os.path.join(self.datadir, 'expected_no_target.json')
         self.expected_path_downsampled = os.path.join(self.datadir, 'expected_downsampled.json')
+        self.expected_path_from_downsampled_input = os.path.join(self.datadir, 'expected_from_downsampled_input.json')
         self.expected_path_rs88 = os.path.join(self.datadir, 'expected_downsampled_rs88.json')
         self.expected_metrics_low_cover = os.path.join(self.datadir, 'expected_metrics_low_cover.json')
         self.expected_picard2 = os.path.join(self.datadir, 'expected_picard2.json')
@@ -75,6 +78,17 @@ class test(unittest.TestCase):
         }
         self.assert_output_ok(actual_path, expected_path, expected_variables)
 
+    def assert_output_with_downsampled_input_ok(self, actual_path, expected_path):
+        expected_variables = {
+            "inserted bases": 315,
+            "reads per start point": 1.008, # downsampled
+            "readsMissingMDtags": 20000, # downsampled
+            "sample level": None,
+            "total reads": 80020,
+            "total target size": 527189,
+        }
+        self.assert_output_ok(actual_path, expected_path, expected_variables)
+
     def assert_output_ok(self, actual_path, expected_path, expected_variables):
         with (open(actual_path)) as f: output = json.loads(f.read())
         # do individual sanity checks on some variables
@@ -102,6 +116,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -126,6 +141,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -150,6 +166,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -174,6 +191,7 @@ class test(unittest.TestCase):
         config = {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -198,6 +216,7 @@ class test(unittest.TestCase):
         config = {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -218,10 +237,38 @@ class test(unittest.TestCase):
         self.assert_default_output_ok(out_path, self.expected_picard2_multiple_libraries)
         qc.cleanup()
 
-    def test_downsampled_analysis(self):
+    def test_downsampled_input(self):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam_nonempty,
+            bam_qc.CONFIG_KEY_TARGET: self.target_path,
+            bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
+            bam_qc.CONFIG_KEY_LOG: self.log_path,
+            bam_qc.CONFIG_KEY_METADATA: self.metadata_path,
+            bam_qc.CONFIG_KEY_MARK_DUPLICATES: self.markdup_path,
+            bam_qc.CONFIG_KEY_N_AS_MISMATCH: self.n_as_mismatch,
+            bam_qc.CONFIG_KEY_SKIP_BELOW_MAPQ: None,
+            bam_qc.CONFIG_KEY_RANDOM_SEED: None,
+            bam_qc.CONFIG_KEY_REFERENCE: self.reference,
+            bam_qc.CONFIG_KEY_SAMPLE: None,
+            bam_qc.CONFIG_KEY_TEMP_DIR: self.tmpdir,
+            bam_qc.CONFIG_KEY_VERBOSE: self.verbose,
+            bam_qc.CONFIG_KEY_WORKFLOW_VERSION: self.workflow_version
+        }
+        qc = bam_qc(config)
+        out_path = os.path.join(self.tmpdir, 'out_downsampled.json')
+        qc.write_output(out_path)
+        self.assertTrue(os.path.exists(out_path))
+        ep = self.expected_path_from_downsampled_input
+        self.assert_output_with_downsampled_input_ok(out_path, ep)
+        qc.cleanup()
+
+    def test_downsampling_analysis(self):
+        config =  {
+            bam_qc.CONFIG_KEY_BAM: self.bam_path,
+            bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -322,6 +369,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -369,6 +417,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: self.target_path,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,
@@ -426,6 +475,39 @@ class test(unittest.TestCase):
             raise
         self.assert_default_output_ok(out_path, self.expected_path)
 
+    def test_main_script_downsampled_input(self):
+        relative_path = os.path.join(os.path.dirname(__file__), os.pardir, 'bin', 'run_bam_qc.py')
+        script = os.path.realpath(relative_path)
+        out_path = os.path.join(self.tmpdir, 'script_out.json')
+        args = [
+            script,
+            '--bam', self.bam_path,
+            '--downsampled-bam', self.downsampled_bam_nonempty,
+            '--target', self.target_path,
+            '--insert-max', str(self.insert_max),
+            '--metadata', self.metadata_path,
+            '--mark-duplicates', self.markdup_path,
+            '--out', out_path,
+            '--reference', self.reference,
+            '--temp-dir', self.tmpdir,
+            '--workflow-version', self.workflow_version
+        ]
+        if self.n_as_mismatch:
+            args.append('--n-as-mismatch')
+        if self.debug:
+            args.append('--debug')
+        if self.verbose:
+            args.append('--verbose')
+        result = subprocess.run(args)
+        try:
+            result.check_returncode()
+        except subprocess.CalledProcessError:
+            print("STANDARD OUTPUT:", result.stdout, file=sys.stderr)
+            print("STANDARD ERROR:", result.stderr, file=sys.stderr)
+            raise
+        ep = self.expected_path_from_downsampled_input
+        self.assert_output_with_downsampled_input_ok(out_path, ep)
+
     def test_version_updater(self):
         # 'update' copies of the test files with a dummy package version
         # then check the dummy version has been written correctly
@@ -445,6 +527,7 @@ class test(unittest.TestCase):
         config =  {
             bam_qc.CONFIG_KEY_BAM: self.bam_path,
             bam_qc.CONFIG_KEY_DEBUG: self.debug,
+            bam_qc.CONFIG_KEY_DOWNSAMPLED_BAM: self.downsampled_bam,
             bam_qc.CONFIG_KEY_TARGET: None,
             bam_qc.CONFIG_KEY_INSERT_MAX: self.insert_max,
             bam_qc.CONFIG_KEY_LOG: self.log_path,

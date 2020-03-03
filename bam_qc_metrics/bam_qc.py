@@ -173,6 +173,7 @@ class version_updater(base_constants):
 
 class bam_qc(base):
 
+    CONFIG_KEY_DOWNSAMPLED_BAM = 'downsampled bam'
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
     CONFIG_KEY_RANDOM_SEED = 'random seed'
@@ -226,6 +227,7 @@ class bam_qc(base):
             config[self.CONFIG_KEY_DEBUG],
             config[self.CONFIG_KEY_VERBOSE]
         )
+        self.downsampled_bam = config[self.CONFIG_KEY_DOWNSAMPLED_BAM]
         self.expected_insert_max = config[self.CONFIG_KEY_INSERT_MAX]
         self.mark_duplicates_metrics = self.read_mark_dup(config[self.CONFIG_KEY_MARK_DUPLICATES])
         self.metadata = self.read_metadata(config[self.CONFIG_KEY_METADATA])
@@ -241,7 +243,7 @@ class bam_qc(base):
         self.fast_metrics = None
         self.package_version = bam_qc_metrics.read_package_version()
         self.qual_fail_reads = None
-        self.sample_total = None
+        self.downsampled_total = None
         self.slow_metrics = None
         (self.tmpdir, self.tmp_object) = self.setup_tmpdir(config[self.CONFIG_KEY_TEMP_DIR])
         self.unmapped_excluded_reads = None
@@ -268,12 +270,17 @@ class bam_qc(base):
         self.fast_metrics = self.update_unmapped_count(fast_finder.get_metrics())
         self.logger.info("Finished computing fast bam_qc metrics")
         # apply downsampling (if any)
-        if self.sample_level != None:
+        if self.downsampled_bam != None:
+            self.logger.info("Using downsampled input %s" % self.downsampled_bam)
+            slow_finder_input_path = self.downsampled_bam
+            self.downsampled_total = int(pysam.view('-c', slow_finder_input_path).strip())
+        elif self.sample_level != None:
+            self.logger.info("Downsampling input to %i reads" % self.sample_level)
             total_reads = self.fast_metrics[self.TOTAL_READS_KEY]
             args = [fast_finder_input_path, self.sample_level, total_reads]
-            (slow_finder_input_path, self.sample_total) = self.apply_downsampling(*args)
+            (slow_finder_input_path, self.downsampled_total) = self.apply_downsampling(*args)
         else:
-            self.logger.info("Downsampling option is not in effect")
+            self.logger.info("Downsampling options are not in effect")
             slow_finder_input_path = fast_finder_input_path
         # find 'slow' metrics on (maybe) downsampled dataset
         self.logger.info("Started computing slow bam_qc metrics")
@@ -568,6 +575,7 @@ class bam_qc(base):
         expected = set([
             self.CONFIG_KEY_BAM,
             self.CONFIG_KEY_DEBUG,
+            self.CONFIG_KEY_DOWNSAMPLED_BAM,
             self.CONFIG_KEY_INSERT_MAX,
             self.CONFIG_KEY_LOG,
             self.CONFIG_KEY_MARK_DUPLICATES,
@@ -635,7 +643,7 @@ class bam_qc(base):
         output['qual fail reads'] = self.qual_fail_reads
         output[self.PACKAGE_VERSION_KEY] = self.package_version
         output['sample level'] = self.sample_level
-        output['sample total'] = self.sample_total
+        output['downsampled total'] = self.downsampled_total
         output['target file'] = os.path.split(self.target_path)[-1] if self.target_path else None
         output['workflow version'] = self.workflow_version
         if out_path != '-':
