@@ -3,5 +3,9 @@
     "group id": "Weyland-Yutani",
     "library design": "WY-1001",
     "tissue origin": "LV-426",
-    "tissue type": "Claw fragment"
+    "tissue type": "Claw fragment",
+    "total input reads meta": 83020,
+    "non-primary reads meta": 1200,
+    "unmapped reads meta": 1000,
+    "low-quality reads meta": 800
 }

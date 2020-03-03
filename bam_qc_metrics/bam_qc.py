@@ -207,7 +207,15 @@ class bam_qc(base):
         'group id',
         'library design',
         'tissue origin',
-        'tissue type'
+        'tissue type',
+        # input/filtered read counts (for merged and un-merged input)
+        # 'meta' distinguishes from similarly named fields generated in this package, eg:
+        # - 'unmapped reads' from the in-package quality filter
+        # - 'total reads' from samtools stats output
+        'total input reads meta',
+        'non-primary reads meta',
+        'unmapped reads meta',
+        'low-quality reads meta'
     ]
     DEFAULT_RANDOM_SEED = 42
 

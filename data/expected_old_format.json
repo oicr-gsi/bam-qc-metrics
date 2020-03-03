@@ -41,6 +41,7 @@
     "instrument": "NEAT-genReads",
     "lane": "1",
     "library": "Simulated_5X_chr21",
+    "low-quality reads meta": 800,
     "mapped reads": "80020",
     "mark duplicates": {
         "ESTIMATED_LIBRARY_SIZE": "44453331",
@@ -161,6 +162,7 @@
     "mismatchCount": "0",
     "non collapsed bases covered": 0,
     "non primary reads": "0",
+    "non-primary reads meta": 1200,
     "number of ends": "paired end",
     "number of targets": "2085",
     "paired reads": 80020,
@@ -1710,6 +1712,8 @@
     "stdevInsert": "7.638457",
     "target file": "t/test/SureSelect_All_Exon_V4_Covered_Sorted_chr21.bed",
     "target size": 527189,
+    "total input reads meta": 83020,
     "total reads": 80020,
-    "unmapped reads": "0"
+    "unmapped reads": "0",
+    "unmapped reads meta": 1000
 }

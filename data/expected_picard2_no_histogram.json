@@ -2400,6 +2400,7 @@
     "lane": "1",
     "library": "Simulated_5X_chr21",
     "library design": null,
+    "low-quality reads meta": 800,
     "mapped reads": 80020,
     "mark duplicates": {
         "ESTIMATED_LIBRARY_SIZE": 0,
@@ -2415,6 +2416,7 @@
     },
     "mismatched bases": 0,
     "non primary reads": 0,
+    "non-primary reads meta": 1200,
     "number of targets": 2085,
     "package version": "0.2.4",
     "paired end": true,
@@ -6679,8 +6681,10 @@
     "tissue origin": null,
     "tissue type": null,
     "total bases on target": 3607087,
+    "total input reads meta": 83020,
     "total reads": 80020,
     "total target size": 527189,
     "unmapped reads": 0,
+    "unmapped reads meta": 1000,
     "workflow version": "0.0.0_TEST"
 }
