@@ -1,15 +1,6 @@
 CHANGELOG
 =========
 
-Unreleased
-----------
-
-Added:
-- GP-2098 Sorted input for bedtools
-
-Removed:
-- GP-2305 Remove downsampling and filtering from bam-qc-metrics
-
 v0.2.5: 2020-03-03
 ------------------
 
