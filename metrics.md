@@ -126,11 +126,17 @@ The read counts computed by `bam-qc-metrics` will be redundant, and potentially 
 
 The metadata fields are supplied as JSON input to the `run_bam_qc.py` script.
 
-Two sets of metadata fields are in use:
+Metadata for read counts consists of the following fields, discussed in the previous section:
+- `[non-primary reads meta, low-quality reads meta, total input reads meta, unmapped reads meta]`
+
+Two further sets of metadata fields are in use:
 - `['barcode', 'instrument', 'lane', 'library', 'run name', 'sample']` for lane-level BAM input
 - `['donor', 'group id', 'library design', 'tissue origin', 'tissue type']` for merged BAM input
 
+So the full set of metadata consists of the read count fields, plus the appropriate extra fields for lane-level or merged BAM input.
+
 Metadata fields not appropriate for the given BAM input will appear in JSON output with a null value.
+
 
 ## Filtering
 
