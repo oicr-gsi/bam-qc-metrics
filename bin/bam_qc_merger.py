@@ -121,10 +121,6 @@ class bamqc_merger:
             current_normalized = self.report[metric] * running_total
             new_normalized = vetted_value * total_reads
             total_updated = running_total + total_reads
-            '''
-                Non-normalized implementation:
-                self.report[metric] = round(self.report[metric] * (count-1)/count + vetted_value/count, PRECISION)
-            '''
             self.report[metric] = round((current_normalized + new_normalized)/total_updated, self.PRECISION)
         else:
             self.report[metric] = vetted_value

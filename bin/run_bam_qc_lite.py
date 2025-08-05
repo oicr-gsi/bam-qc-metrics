@@ -135,11 +135,8 @@ def main():
 
     '''Before running, validate that we have all arguments in a good shape'''
 
-    '''Assume we have inputs from multiple lanes, use threading to process inputs separately by lane'''
+    '''Process inputs separately by lane'''
     qc = bam_qc_lite(config)
-
-    '''Merge if we have > 1 lane, otherwise return report for a single set of inputs'''
-
     qc.write_output(args.out)
 
 if __name__ == "__main__":
