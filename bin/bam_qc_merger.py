@@ -5,6 +5,9 @@
    Some of the metrics need to be summed, some - averaged and some will go into the final report as-is.
    Only relevant metrics are kept, lane-specific metrics are not accepted. These metrics are lane-specific
    and cannot be used in call ready mode
+
+   When only one lane-specific report passed as an input, this script will make a copy and return it as the
+   final report without alterations (lane-level mode)
 """
 
 import json
@@ -21,7 +24,7 @@ MAX = 4
 
 class bamqc_merger:
     PRECISION = 1
-    """ Unknown and line-specific metrics will be skipped """
+    # Unknown and lane-specific metrics will be skipped
     supported_metrics = {
         "alignment reference": ASIS,
         "average read length": MEAN,
@@ -101,7 +104,7 @@ class bamqc_merger:
     report = {}
     inputs = []
 
-    ''' Function will accept a list of json files and return a list of dicts'''
+    # Function will accept a list of json files and return a list of dicts
     @staticmethod
     def load_inputs(report_files: list):
         replist = []
@@ -111,7 +114,7 @@ class bamqc_merger:
             repFile.close()
         return replist
 
-    ''' Data handling functions '''
+    # Data handling functions
     def _merge_as_is(self, metric: str, value, count: int, total_reads: int, running_total: int):
         self.report[metric] = value
 
@@ -130,7 +133,7 @@ class bamqc_merger:
             self.report[metric] = self.report.get(metric, 0) + value
 
     def _merge_hist(self, metric: str, value, count: int, total_reads: int, running_total: int):
-        """quality by cycle hist, cov. per target, targets sizes and PERCENT DUPLICATION are handled differently"""
+        # quality by cycle hist, cov. per target, targets sizes and PERCENT DUPLICATION are handled differently
         if not isinstance(value, dict):
             return
         if metric not in self.report:
@@ -153,7 +156,7 @@ class bamqc_merger:
         else:
             self.report[metric] = value
 
-    '''Merging function'''
+    # Merging function
     def merge_reports(self):
         method_dispatch = {
             ASIS: self._merge_as_is,
@@ -198,7 +201,7 @@ def main():
     output = args.output
 
     reports = split(",", report_list)
-    '''If we have only one input report, just dump it into the json'''
+    # If we have only one input report, use it as the final report as-is
     if len(reports) == 1:
         report = reports[0]
     else:
