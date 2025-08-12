@@ -203,7 +203,9 @@ def main():
     reports = split(",", report_list)
     # If we have only one input report, use it as the final report as-is
     if len(reports) == 1:
-        report = reports[0]
+        rep_file = reports[0]
+        with open(rep_file, "r") as injson:
+            report = json.load(injson)
     else:
         b_merger = bamqc_merger(reports)
         report = b_merger.get_report()
