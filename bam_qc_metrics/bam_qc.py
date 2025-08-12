@@ -23,8 +23,8 @@ class base_constants(object):
     Class for shared constants
     """
 
-    PRECISION = 1 # number of decimal places for rounded output
-    FINE_PRECISION = 3 # finer precision, eg. for reads_per_start_point output
+    PRECISION = 1  # number of decimal places for rounded output
+    FINE_PRECISION = 3  # finer precision, eg. for reads_per_start_point output
     ALIGNMENT_REF_KEY = 'alignment reference'
     INSERT_MAX_KEY = 'insert max'
     READ_1_LENGTH_KEY = 'read 1'
@@ -58,7 +58,7 @@ class base(base_constants):
             log_level = logging.INFO
         logger.setLevel(log_level)
         handler = None
-        if log_path==None:
+        if log_path == None:
             handler = logging.StreamHandler()
         else:
             handler = logging.FileHandler(log_path)
@@ -77,14 +77,13 @@ class base(base_constants):
             not_expected_set = found - expected
             not_expected = not_expected_set if len(not_expected_set) > 0 else None
             msg = "Config fields are not valid\n"
-            msg = msg+"Fields expected and not found: "+str(not_found)+"\n"
-            msg = msg+"Fields found and not expected: "+str(not_expected)+"\n"
+            msg = msg + "Fields expected and not found: " + str(not_found) + "\n"
+            msg = msg + "Fields found and not expected: " + str(not_expected) + "\n"
             # do not log this message; logger not yet initialized
             raise ValueError(msg)
 
 
 class validator:
-
     """Utility functions for validating arguments to command-line scripts"""
 
     MINIMUM_SAMPLE_LEVEL = 1000
@@ -140,23 +139,22 @@ class validator:
             valid = False
         elif int(sample_level) < klass.MINIMUM_SAMPLE_LEVEL:
             msg = "ERROR: Minimum sample level is %i reads." % klass.MINIMUM_SAMPLE_LEVEL
-            msg = msg+" Increase the --sample argument, or use --all to omit downsampling.\n"
+            msg = msg + " Increase the --sample argument, or use --all to omit downsampling.\n"
             sys.stderr.write(msg)
             valid = False
         return valid
 
 
 class version_updater(base_constants):
-
-    FILENAMES =  ['expected.json',
-                  'expected_downsampled.json',
-                  'expected_fast_metrics.json',
-                  'expected_no_target.json',
-                  'expected_downsampled_rs88.json']
+    FILENAMES = ['expected.json',
+                 'expected_downsampled.json',
+                 'expected_fast_metrics.json',
+                 'expected_no_target.json',
+                 'expected_downsampled_rs88.json']
 
     def __init__(self):
-       self.package_version = bam_qc_metrics.read_package_version()
-    
+        self.package_version = bam_qc_metrics.read_package_version()
+
     def get_filenames(self):
         return self.FILENAMES
 
@@ -172,7 +170,6 @@ class version_updater(base_constants):
 
 
 class bam_qc(base):
-
     CONFIG_KEY_DOWNSAMPLED_BAM = 'downsampled bam'
     CONFIG_KEY_MARK_DUPLICATES = 'mark duplicates'
     CONFIG_KEY_METADATA = 'metadata'
@@ -182,7 +179,7 @@ class bam_qc(base):
     CONFIG_KEY_TARGET = 'target'
     CONFIG_KEY_TEMP_DIR = 'temp dir'
     CONFIG_KEY_WORKFLOW_VERSION = 'workflow version'
-    DEFAULT_MARK_DUPLICATES_METRICS =  {
+    DEFAULT_MARK_DUPLICATES_METRICS = {
         "ESTIMATED_LIBRARY_SIZE": None,
         "HISTOGRAM": {},
         "LIBRARY": None,
@@ -299,17 +296,17 @@ class bam_qc(base):
         - sample_level is number of reads desired in the downsampled file
         - total_reads is number of reads in the file denoted by bam_path
         """
-        [ds_path, ds_total] = [None]*2
+        [ds_path, ds_total] = [None] * 2
         warning_threshold = 1000
         if sample_level >= total_reads:
-            msg = "Downsampling omitted: Total input reads = "+\
+            msg = "Downsampling omitted: Total input reads = " + \
                   "%i, target number of reads for downsampled file = %i" % (total_reads, sample_level)
             self.logger.info(msg)
             ds_path = bam_path
         else:
             if sample_level < warning_threshold:
                 msg = "Requested number of reads is less than %i. " % warning_threshold
-                msg = msg+"Running with very few reads is not recommended; metrics may behave "+\
+                msg = msg + "Running with very few reads is not recommended; metrics may behave " + \
                       "unexpectedly or fail to complete."
                 self.logger.warning(msg)
             (ds_path, ds_total) = self.write_downsampled_bam(bam_path, sample_level, total_reads)
@@ -372,13 +369,14 @@ class bam_qc(base):
     def read_metadata(self, metadata_path):
         metadata = None
         if metadata_path != None:
-            with open(metadata_path) as f: raw_metadata = json.loads(f.read())
+            with open(metadata_path) as f:
+                raw_metadata = json.loads(f.read())
             metadata = {key: raw_metadata.get(key) for key in self.METADATA_KEYS}
         else:
             self.logger.info("Metadata file not given, using empty defaults")
             metadata = {key: None for key in self.METADATA_KEYS}
         return metadata
-    
+
     def read_mark_dup(self, input_path):
 
         # scrape metrics file
@@ -386,7 +384,8 @@ class bam_qc(base):
             return self.DEFAULT_MARK_DUPLICATES_METRICS
         section = 0
         line_count = 0
-        with open(input_path) as f: lines = f.readlines()
+        with open(input_path) as f:
+            lines = f.readlines()
         keys = []
         values = []
         hist = {}
@@ -423,7 +422,7 @@ class bam_qc(base):
                 # JSON doesn't allow numeric dictionary keys, so hist_bin is stringified in output
                 # but rounding removes the trailing '.0'
                 hist_bin = round(float(terms[0])) if re.search('\.0$', terms[0]) else terms[0]
-                for key_index in range(1, len(histogram_keys)): # start at second term (first term is hist_bin)
+                for key_index in range(1, len(histogram_keys)):  # start at second term (first term is hist_bin)
                     hist_entry = hist.get(histogram_keys[key_index], {})
                     if '.' in terms[key_index]:
                         hist_entry[hist_bin] = float(terms[key_index])
@@ -467,7 +466,7 @@ class bam_qc(base):
 
             # aggregate metrics
             for k, v in metrics.items():
-                if k in ['LIBRARY','PERCENT_DUPLICATION', 'ESTIMATED_LIBRARY_SIZE']:
+                if k in ['LIBRARY', 'PERCENT_DUPLICATION', 'ESTIMATED_LIBRARY_SIZE']:
                     # metrics that can not be aggregated
                     continue
                 else:
@@ -546,7 +545,7 @@ class bam_qc(base):
                     M = r
             return unique_read_pairs * (m + M) / 2.0
         else:
-            return 0 # rather than null/None, we return 0 as default
+            return 0  # rather than null/None, we return 0 as default
 
     def setup_tmpdir(self, tmpdir_base=None):
         tmp_object = tempfile.TemporaryDirectory(prefix='bam_qc_', dir=tmpdir_base)
@@ -561,7 +560,7 @@ class bam_qc(base):
         """
         if self.mapq_filter_is_active():
             if metrics[self.UNMAPPED_READS_KEY] > 0:
-                msg = "Mapping quality filter is in effect, so all unmapped reads should have been "+\
+                msg = "Mapping quality filter is in effect, so all unmapped reads should have been " + \
                       "removed from BAM input; but 'reads unmapped' field from samtools stats is %d." \
                       % metrics[self.UNMAPPED_READS_KEY]
                 self.logger.error(msg)
@@ -659,12 +658,11 @@ class bam_qc(base):
 
 
 class fast_metric_finder(base_constants):
-
     """
     Find "fast" metric types which can be evaluated before downsampling
     Mostly uses native samtools stats, rather than custom metrics
     """
-    
+
     # summary numbers (SN) fields denoted in float_keys are floats; integers otherwise
     FLOAT_KEYS = set([
         'error rate',
@@ -673,7 +671,7 @@ class fast_metric_finder(base_constants):
         'insert size standard deviation',
         'percentage of properly paired reads (%)'
     ])
-    
+
     def __init__(self, bam_path, reference, expected_insert_max, n_as_mismatch, logger):
         self.bam_path = bam_path
         self.reference = reference
@@ -697,7 +695,7 @@ class fast_metric_finder(base_constants):
             'reads unmapped': self.UNMAPPED_READS_KEY,
             'non-primary alignments': 'non primary reads',
         }
-        self.samtools_stats = self.run_samtools_stats([self.bam_path,], strict=True)
+        self.samtools_stats = self.run_samtools_stats([self.bam_path, ], strict=True)
         self.metrics = self.evaluate_all_metrics()
         # find secondary stats -- not for JSON export, but used to calculate subsequent metrics
         self.max_read_length = self.evaluate_max_read_length()
@@ -712,14 +710,14 @@ class fast_metric_finder(base_constants):
             if key >= self.expected_insert_max:
                 count += insert_size_histogram[key]
         return count
-        
+
     def evaluate_all_metrics(self):
         metrics = {}
         metric_subsets = [
             self.evaluate_mismatches(),
             self.read_length_and_quality_metrics(),
             self.misc_stats_metrics()
-        ]   
+        ]
         for metric_subset in metric_subsets:
             for key in metric_subset.keys():
                 metrics[key] = metric_subset[key]
@@ -731,7 +729,7 @@ class fast_metric_finder(base_constants):
         Not part of JSON output, but needed to evaluate custom metrics.
         """
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", self.samtools_stats)),
+            filter(lambda line: line != "" and line[0] != '#', re.split("\n", self.samtools_stats)),
             delimiter="\t"
         )
         max_read_length = 0
@@ -761,7 +759,7 @@ class fast_metric_finder(base_constants):
                                                                        '-f', '128',
                                                                        self.bam_path]))
             ur_mismatch = self.parse_mismatch(self.run_samtools_stats(['-r', self.reference,
-                                                                      '-F', '192',
+                                                                       '-F', '192',
                                                                        self.bam_path]))
         else:
             r1_mismatch = {}
@@ -786,14 +784,14 @@ class fast_metric_finder(base_constants):
         histogram = {}
         if len(rows) > 0:
             max_width = max([len(row) for row in rows])
-            histogram = {q: 0 for q in range(max_width-2)}
+            histogram = {q: 0 for q in range(max_width - 2)}
             for row in rows:
                 cycle = int(row[1])
                 counts = [int(n) for n in row[2:]]
                 total = 0
                 count = 0
                 for qscore in range(len(counts)):
-                    total += counts[qscore]*qscore
+                    total += counts[qscore] * qscore
                     count += counts[qscore]
                     histogram[qscore] += counts[qscore]
                 meanByCyc[cycle] = round(float(total) / count, self.PRECISION) if count > 0 else 0
@@ -810,7 +808,7 @@ class fast_metric_finder(base_constants):
             count += length_count
         mean_rl = round(float(total) / count, self.PRECISION) if count > 0 else 0
         return mean_rl
-        
+
     def misc_stats_metrics(self):
         """
         Process the output from 'samtools stats' to derive miscellaneous metrics
@@ -820,7 +818,7 @@ class fast_metric_finder(base_constants):
         metrics['deleted bases'] = 0
         metrics['insert size histogram'] = {}
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", self.samtools_stats)),
+            filter(lambda line: line != "" and line[0] != '#', re.split("\n", self.samtools_stats)),
             delimiter="\t"
         )
         for row in reader:
@@ -843,7 +841,7 @@ class fast_metric_finder(base_constants):
         metrics['pairsMappedAbnormallyFar'] = abnormal_count
         self.logger.debug("Found miscellaneous metrics from samtools stats")
         return metrics
-    
+
     def parse_mismatch(self, samtools_stats):
         """
         Input is the string returned by 'samtools stats'
@@ -853,7 +851,7 @@ class fast_metric_finder(base_constants):
             self.logger.debug("None input to mismatch parser; returning empty dictionary")
             return {}
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", samtools_stats)),
+            filter(lambda line: line != "" and line[0] != '#', re.split("\n", samtools_stats)),
             delimiter="\t"
         )
         mismatch_by_cycle = {}
@@ -864,8 +862,10 @@ class fast_metric_finder(base_constants):
             if row[0] == 'MPC':
                 cycle = int(row[1])
                 mismatches = 0
-                if self.n_as_mismatch: start = 2
-                else: start = 3
+                if self.n_as_mismatch:
+                    start = 2
+                else:
+                    start = 3
                 for m in row[start:]:
                     mismatches += int(m)
                 mismatch_by_cycle[cycle] = mismatches
@@ -891,7 +891,7 @@ class fast_metric_finder(base_constants):
         metrics = {}
         stored = {label: [] for label in ['FFQ', 'FRL', 'LFQ', 'LRL', 'RL']}
         reader = csv.reader(
-            filter(lambda line: line!="" and line[0]!='#', re.split("\n", self.samtools_stats)),
+            filter(lambda line: line != "" and line[0] != '#', re.split("\n", self.samtools_stats)),
             delimiter="\t"
         )
         for row in reader:
@@ -939,7 +939,7 @@ class fast_metric_finder(base_constants):
                                        stderr=subprocess.PIPE,
                                        universal_newlines=True).stdout
         except subprocess.CalledProcessError as cpe:
-            msg = "Failure running samtools stats: {0}".format(cpe)+\
+            msg = "Failure running samtools stats: {0}".format(cpe) + \
                   "\nError output:\n%s\n" % cpe.stderr.strip()
             if strict:
                 self.logger.error(msg)
@@ -947,6 +947,7 @@ class fast_metric_finder(base_constants):
             else:
                 self.logger.warning(msg)
         return stats_str
+
 
 class fast_metric_writer(base):
     """
@@ -1012,7 +1013,6 @@ class fast_metric_writer(base):
 
 
 class slow_metric_finder(base_constants):
-
     """
     Find "slow" metric types which should be evaluated after downsampling (if any)
 
@@ -1024,7 +1024,7 @@ class slow_metric_finder(base_constants):
     READ_1_INDEX = 0
     READ_2_INDEX = 1
     READ_UNKNOWN_INDEX = 2
-    READ_NAMES =  ['1', '2', '?']
+    READ_NAMES = ['1', '2', '?']
 
     # Relevant CIGAR operations
     CIGAR_OP_NAMES = {
@@ -1035,7 +1035,7 @@ class slow_metric_finder(base_constants):
         5: 'hard clip',
     }
     # CIGAR op indices which increment the query cycle
-    CONSUMES_QUERY = set([0,1,4,7,8])
+    CONSUMES_QUERY = set([0, 1, 4, 7, 8])
 
     # metric field names
     HARD_CLIP_KEY = 'hard clip bases'
@@ -1124,11 +1124,11 @@ class slow_metric_finder(base_constants):
             if len(row) == 5 and row[0] == all_name:
                 target = all_name
             elif len(row) >= 8:
-                target = row[3] # name field is populated in BED target entry
+                target = row[3]  # name field is populated in BED target entry
             elif len(row) == 7 and int_expr.match(row[1]) and int_expr.match(row[2]):
-                target = ','.join(row[0:3]) # no name in BED entry; use chrom,start,end
+                target = ','.join(row[0:3])  # no name in BED entry; use chrom,start,end
             else:
-                msg = "Cannot parse target in bedtools output: '"+str(row)+"'"
+                msg = "Cannot parse target in bedtools output: '" + str(row) + "'"
                 self.logger.error(msg)
                 raise ValueError(msg)
             coverage_fields = row[-4:]
@@ -1136,11 +1136,11 @@ class slow_metric_finder(base_constants):
                 [depth, bases, target_size] = [int(x) for x in coverage_fields[0:3]]
                 # coverage_fields[3] = fraction covered; not used here
             except ValueError:
-                msg = "Cannot parse coverage in bedtools output: '"+str(row)+"'"
+                msg = "Cannot parse coverage in bedtools output: '" + str(row) + "'"
                 self.logger.error(msg)
                 raise
             target_sizes[target] = target_size
-            by_target[target] = by_target.get(target, 0) + depth*bases
+            by_target[target] = by_target.get(target, 0) + depth * bases
             if target == all_name:
                 coverage_hist[depth] = bases
         total = by_target[all_name]
@@ -1154,7 +1154,7 @@ class slow_metric_finder(base_constants):
         ur_count = ur_stats[self.READ_COUNT_KEY]
         if ur_count > 0:
             total = float(ur_stats[self.LENGTH_TOTAL_KEY])
-            metrics['read ? average length'] = round(total/ur_count, self.PRECISION)
+            metrics['read ? average length'] = round(total / ur_count, self.PRECISION)
         else:
             metrics['read ? average length'] = None
         metrics['read ? length histogram'] = ur_stats[self.LENGTH_HISTOGRAM_KEY]
@@ -1163,7 +1163,7 @@ class slow_metric_finder(base_constants):
         for cycle in ur_quality_by_cycle.keys():
             quality = ur_quality_by_cycle[cycle]
             total = ur_total_by_cycle[cycle]
-            q = round(float(quality)/total, self.PRECISION) if total > 0 else 0
+            q = round(float(quality) / total, self.PRECISION) if total > 0 else 0
             ur_quality_by_cycle[cycle] = q
         metrics['read ? quality by cycle'] = ur_quality_by_cycle
         metrics['read ? quality histogram'] = ur_stats[self.QUALITY_HISTOGRAM_KEY]
@@ -1178,7 +1178,7 @@ class slow_metric_finder(base_constants):
         # count the reads, excluding secondary alignments (but including unmapped reads)
         unique_reads = int(pysam.view('-c', '-F', '256', self.bam_path).strip())
         if start_points > 0:
-            reads_per_sp = round(float(unique_reads)/start_points, self.FINE_PRECISION)
+            reads_per_sp = round(float(unique_reads) / start_points, self.FINE_PRECISION)
         else:
             reads_per_sp = 0.0
         return reads_per_sp
@@ -1199,9 +1199,9 @@ class slow_metric_finder(base_constants):
                 key = 'read %s %s by cycle' % (self.READ_NAMES[i], op_name)
                 read_length = self.read_lengths[read_length_keys[i]]
                 if read_length == 0:
-                    metrics[key] = {} # placeholder
+                    metrics[key] = {}  # placeholder
                 else:
-                    metrics[key] = {j:0 for j in range(1, read_length+1) }
+                    metrics[key] = {j: 0 for j in range(1, read_length + 1)}
         return metrics
 
     def initialize_unknown_read_stats(self):
@@ -1210,8 +1210,8 @@ class slow_metric_finder(base_constants):
             self.READ_COUNT_KEY: 0,
             self.LENGTH_TOTAL_KEY: 0,
             self.LENGTH_HISTOGRAM_KEY: {},
-            self.QUALITY_BY_CYCLE_KEY: {i : 0 for i in range(1, max_read_length+1)},
-            self.TOTAL_BY_CYCLE_KEY: {i : 0 for i in range(1, max_read_length+1)},
+            self.QUALITY_BY_CYCLE_KEY: {i: 0 for i in range(1, max_read_length + 1)},
+            self.TOTAL_BY_CYCLE_KEY: {i: 0 for i in range(1, max_read_length + 1)},
             self.QUALITY_HISTOGRAM_KEY: {}
         }
         return stats
@@ -1231,13 +1231,16 @@ class slow_metric_finder(base_constants):
         start_point_set = set()
         for read in pysam.AlignmentFile(self.bam_path, 'rb').fetch(until_eof=True):
             read_index = None
-            if read.is_read1: read_index = self.READ_1_INDEX
-            elif read.is_read2: read_index = self.READ_2_INDEX
-            else: read_index = self.READ_UNKNOWN_INDEX
+            if read.is_read1:
+                read_index = self.READ_1_INDEX
+            elif read.is_read2:
+                read_index = self.READ_2_INDEX
+            else:
+                read_index = self.READ_UNKNOWN_INDEX
             start_point_set = self.update_start_point_set(start_point_set, read)
             metrics = self.update_metrics(metrics, read, read_index)
             if read_index == self.READ_UNKNOWN_INDEX:
-               ur_stats = self.update_ur_stats(ur_stats, read)
+                ur_stats = self.update_ur_stats(ur_stats, read)
         start_points = len(start_point_set)
         return (metrics, ur_stats, start_points)
 
@@ -1264,7 +1267,7 @@ class slow_metric_finder(base_constants):
                                       stderr=subprocess.PIPE,
                                       universal_newlines=True).stdout
         except subprocess.CalledProcessError as cpe:
-            msg = "Failure running bedtools: {0}; ".format(cpe)+\
+            msg = "Failure running bedtools: {0}; ".format(cpe) + \
                   "\nError output:\n%s\n" % cpe.stderr.strip()
             self.logger.error(msg)
             raise
@@ -1274,17 +1277,21 @@ class slow_metric_finder(base_constants):
         """ Update the metrics dictionary for a pysam 'read' object """
         if not read.has_tag('MD'):
             metrics[self.MISSING_MD_KEY] += 1
-        if read.query_length == 0: # all bases are hard clipped
+        if read.query_length == 0:  # all bases are hard clipped
             metrics[self.HARD_CLIP_KEY] += read.infer_read_length()
             return metrics
         cycle = 1
         if read.cigartuples != None:
-            if read.is_reverse: cigar_list = reversed(read.cigartuples)
-            else: cigar_list = read.cigartuples
+            if read.is_reverse:
+                cigar_list = reversed(read.cigartuples)
+            else:
+                cigar_list = read.cigartuples
             for (op, length) in cigar_list:
                 if op in self.CIGAR_OP_NAMES:
-                    if op == 4: metrics['soft clip bases'] += length
-                    elif op == 5: metrics['hard clip bases'] += length
+                    if op == 4:
+                        metrics['soft clip bases'] += length
+                    elif op == 5:
+                        metrics['hard clip bases'] += length
                     for i in range(length):
                         key = 'read %s %s by cycle' % (self.READ_NAMES[read_index],
                                                        self.CIGAR_OP_NAMES[op])
@@ -1310,7 +1317,7 @@ class slow_metric_finder(base_constants):
         ur_stats[lhk][ur_len] = ur_stats[lhk].get(ur_len, 0) + 1
         for i in range(read.query_length):
             q = read.query_qualities[i]
-            ur_stats[self.QUALITY_BY_CYCLE_KEY][i+1] += q
-            ur_stats[self.TOTAL_BY_CYCLE_KEY][i+1] += 1
+            ur_stats[self.QUALITY_BY_CYCLE_KEY][i + 1] += q
+            ur_stats[self.TOTAL_BY_CYCLE_KEY][i + 1] += 1
             ur_stats[qhk][q] = ur_stats[qhk].get(q, 0) + 1
         return ur_stats

@@ -1,6 +1,13 @@
 CHANGELOG
 =========
 
+v0.2.6: 2025-08-05
+------------------
+
+Added:
+- GRD-946 bamQClite scripts, a version primarily relying on external tools for metrics
+
+
 v0.2.5: 2020-03-03
 ------------------
 
