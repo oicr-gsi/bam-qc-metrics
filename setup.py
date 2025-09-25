@@ -16,9 +16,9 @@ with open(os.path.join(os.path.dirname(__file__), version_dir_lite, version_file
 setup(
     name='bam-qc-metrics',
     version=package_version,
-    scripts=['bin/run_bam_qc.py', 'bin/write_fast_metrics.py', 'bin/bam_qc_merger.py', 'bin/run_bam_qc_lite.py'],
+    scripts=['bin/run_bam_qc.py', 'bin/write_fast_metrics.py', 'bin/bam_qc_coverage_histogram.py', 'bin/bam_qc_coverage_merger.py', 'bin/bam_qc_merger.py', 'bin/run_bam_qc_lite.py'],
     packages=find_packages(),
-    install_requires=['attrs', 'jsonschema', 'pybedtools', 'pyrsistent', 'pysam', 'six'],
+    install_requires=['attrs', 'jsonschema', 'numpy', 'pandas', 'bedtools', 'pyrsistent', 'pysam', 'six'],
     data_files=[(version_dir, [os.path.join(version_dir, version_filename)]),(version_dir_lite, [os.path.join(version_dir_lite, version_filename)])],
     python_requires='>=3.12',
     author="Iain Bancarz",
