@@ -20,7 +20,6 @@ class base_constants(object):
     """
     PRECISION = 1  # number of decimal places for rounded output
     FINE_PRECISION = 3  # finer precision, e.g. for reads_per_start_point output
-    MAX_REPORTED_COVERAGE = 1000
     ALIGNMENT_REF_KEY = 'alignment reference'
     INSERT_MAX_KEY = 'insert max'
     READ_1_LENGTH_KEY = 'read 1'
@@ -320,16 +319,14 @@ class bam_qc_lite(base):
         return metrics
 
     def read_coverage_histogram(self, c_histo_path):
-        """ Do not report coverage higher than MAX_REPORTED_COVERAGE """
         try:
             if validator.validate_input_file(c_histo_path):
                 metrics = {}
                 with open(c_histo_path, 'r') as ch:
                     my_dict = json.load(ch)
                     sorted_dict = dict(sorted(my_dict.items(), key=lambda item: int(item[0])))
-                    # Exclude keys greater than 10 and values equal 0:
-                    metrics = dict(filter(lambda item: int(item[0]) <= self.MAX_REPORTED_COVERAGE and item[1] != 0,
-                                          sorted_dict.items()))
+                    # Exclude values equal 0:
+                    metrics = dict(filter(lambda item: item[1] != 0, sorted_dict.items()))
                 return metrics
             return None
         except Exception as e:
@@ -362,6 +359,7 @@ class bam_qc_lite(base):
                 genome_lines.append(line)
 
         metrics = {}
+        # only mean genomic coverage reported in case when targeted coverage is zero
         data = self.evaluate_coverage(region_lines) if len(region_lines) > 0 else self.evaluate_coverage(genome_lines)
 
         if data is not None and isinstance(data, dict):
@@ -467,7 +465,7 @@ class bam_qc_lite(base):
         if self.mark_duplicates_metrics is not None and isinstance(self.mark_duplicates_metrics, dict):
             output['mark duplicates'] = self.mark_duplicates_metrics
         if self.coverage_metrics is not None and isinstance(self.coverage_metrics, dict):
-            output['coverage_histogram'] = self.coverage_metrics
+            output['coverage histogram'] = self.coverage_metrics
         if self.target_coverage_metrics is not None and isinstance(self.target_coverage_metrics, dict):
             output.update(self.target_coverage_metrics)
         if self.reads_on_target is not None:
