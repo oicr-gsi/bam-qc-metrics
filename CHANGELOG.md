@@ -1,6 +1,15 @@
 CHANGELOG
 =========
 
+v0.2.7: 2025-09-25
+------------------
+
+Added:
+- GRD-982 handle mosdepth windowed coverage
+- append call-ready coverage histogram and duplicate marking resuts into the final report in call-ready mode
+- minor fixes
+
+
 v0.2.6: 2025-08-05
 ------------------
 

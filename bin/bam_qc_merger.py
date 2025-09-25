@@ -12,7 +12,9 @@
 
 import json
 import argparse
+import os.path
 import sys
+import re
 from re import split
 
 DEFAULT_MERGED_REPORT = "bamQC_final_report.json"
@@ -30,7 +32,7 @@ class bamqc_merger:
         "average read length": MEAN,
         "bases mapped": SUM,
         "bases per target": HIST,
-        "coverage_histogram": HIST,
+        "coverage histogram": HIST,
         "coverage per target": HIST,
         "deleted bases": SUM,
         "donor": ASIS,
@@ -114,6 +116,49 @@ class bamqc_merger:
             repFile.close()
         return replist
 
+    # This is from bam_qc_lite, loading metrics and returning a dict
+    def update_mark_dup(self, input_path):
+        if not os.path.exists(input_path):
+            return
+
+        reading_in = False
+        with open(input_path) as f:
+            lines = f.readlines()
+        metrics = {}
+        for line in lines:
+            line = line.strip()
+            if re.match('samblaster: -*$', line):
+                # DuplicationMetrics section start
+                reading_in = True
+                continue
+            if not reading_in:
+                continue
+
+            temp_values = line.split()
+            if len(temp_values) > 5:
+                if temp_values[1] == 'Orphan/Singleton':
+                    metrics['UNPAIRED_READS_EXAMINED'] = int(temp_values[2])
+                    metrics['UNPAIRED_READ_DUPLICATES'] = int(temp_values[4])
+                elif temp_values[1] == 'Total':
+                    metrics['READ_PAIRS_EXAMINED'] = int(temp_values[2])
+                    metrics['READ_PAIR_DUPLICATES'] = int(temp_values[4])
+                    metrics['PERCENT_DUPLICATION'] = float(temp_values[5])
+
+        self.report['mark duplicates'] = dict(sorted(metrics.items(), key=lambda item: item[0]))
+
+    def update_coverage(self, path):
+        try:
+            if os.path.exists(path):
+                metrics = {}
+                with open(path, 'r') as ch:
+                    my_dict = json.load(ch)
+                    sorted_dict = dict(sorted(my_dict.items(), key=lambda item: int(item[0])))
+                    # Exclude values equal 0:
+                    metrics = dict(filter(lambda item: item[1] != 0, sorted_dict.items()))
+                self.report['coverage histogram'] = metrics
+        except Exception as e:
+            print("ERROR: Could not read coverage data: {0}".format(e))
+
     # Data handling functions
     def _merge_as_is(self, metric: str, value, count: int, total_reads: int, running_total: int):
         self.report[metric] = value
@@ -133,13 +178,13 @@ class bamqc_merger:
             self.report[metric] = self.report.get(metric, 0) + value
 
     def _merge_hist(self, metric: str, value, count: int, total_reads: int, running_total: int):
-        # quality by cycle hist, cov. per target, targets sizes and PERCENT DUPLICATION are handled differently
+        # quality by cycle hist, targets sizes and PERCENT DUPLICATION are handled differently
         if not isinstance(value, dict):
             return
         if metric not in self.report:
             self.report[metric] = {}
         for entry, number in value.items():
-            if metric.endswith('quality by cycle') or metric == "coverage per target" or entry == 'PERCENT_DUPLICATION':
+            if metric.endswith('quality by cycle') or entry == 'PERCENT_DUPLICATION':
                 current_normalized = self.report[metric].get(entry, 0) * running_total
                 new_normalized = number * total_reads
                 total_updated = running_total + total_reads
@@ -148,6 +193,8 @@ class bamqc_merger:
                 if self.report[metric].get(entry, 0) == 0:
                     self.report[metric][entry] = number
             else:
+                if isinstance(number, float):
+                    number = round(number, self.PRECISION)
                 self.report[metric][entry] = self.report[metric].get(entry, 0) + number
 
     def _merge_max(self, metric: str, value, count: int, total_reads: int, running_total: int):
@@ -174,6 +221,10 @@ class bamqc_merger:
                 for metric, value in rep.items():
                     if metric not in self.supported_metrics:
                         continue
+                    ''' Debug '''
+                    if metric == "coverage per target":
+                        print("Found!")
+                    ''' Debug ends '''
                     method = self.supported_metrics[metric]
                     handler = method_dispatch.get(method)
                     if handler:
@@ -194,11 +245,16 @@ class bamqc_merger:
 def main():
     parser = argparse.ArgumentParser(description='QC metrics merger.')
     parser.add_argument('-l', '--list', help='List of JSON reports.', required=True)
+    parser.add_argument('-d', '--dup', help='Optional call-ready dup-marking report.', required=False)
+    parser.add_argument('-t', '--hist', help='Optional call-ready coverage histogram.', required=False)
     parser.add_argument('-o', '--output', help='', required=False, default=DEFAULT_MERGED_REPORT)
     args = parser.parse_args()
 
     report_list = args.list
     output = args.output
+    # noinspection SpellCheckingInspection
+    dupmarking_data = args.dup
+    coverage_histogram = args.hist
 
     reports = split(",", report_list)
     # If we have only one input report, use it as the final report as-is
@@ -208,10 +264,12 @@ def main():
             report = json.load(injson)
     else:
         b_merger = bamqc_merger(reports)
+        b_merger.update_mark_dup(dupmarking_data)
+        b_merger.update_coverage(coverage_histogram)
         report = b_merger.get_report()
 
     with open(output, "w") as out:
-        json.dump(report, out, ensure_ascii=True)
+        json.dump(report, out, sort_keys=True, ensure_ascii=True)
 
 
 if __name__ == "__main__":
