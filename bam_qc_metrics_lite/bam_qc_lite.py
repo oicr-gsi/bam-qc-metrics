@@ -189,6 +189,7 @@ class bam_qc_lite(base):
         'instrument',
         'lane',
         'library',
+        'mode',
         'run name',
         'sample',
         # for merged BAM input
@@ -314,7 +315,8 @@ class bam_qc_lite(base):
                 elif temp_values[1] == 'Total':
                     metrics['READ_PAIRS_EXAMINED'] = int(temp_values[2])
                     metrics['READ_PAIR_DUPLICATES'] = int(temp_values[4])
-                    metrics['PERCENT_DUPLICATION'] = float(temp_values[5])
+                    # make it back-compatible with picard as SamBlaster reports duplication as percent
+                    metrics['PERCENT_DUPLICATION'] = round(float(temp_values[5])/100, self.FINE_PRECISION)
 
         return metrics
 
