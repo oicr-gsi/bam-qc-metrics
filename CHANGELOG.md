@@ -1,6 +1,14 @@
 CHANGELOG
 =========
 
+v0.2.8: 2025-09-25
+------------------
+
+Added:
+- previously omitted metadata fields
+Changed:
+- reported duplicate marking percents are now reported as ratio (to enable back-compatibility with picard's metric)
+
 v0.2.7: 2025-09-25
 ------------------
 

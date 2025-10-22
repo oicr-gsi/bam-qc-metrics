@@ -26,10 +26,12 @@ MAX = 4
 
 class bamqc_merger:
     PRECISION = 1
+    FINE_PRECISION = 3
     # Unknown and lane-specific metrics will be skipped
     supported_metrics = {
         "alignment reference": ASIS,
         "average read length": MEAN,
+        "barcode": ASIS,
         "bases mapped": SUM,
         "bases per target": HIST,
         "coverage histogram": HIST,
@@ -45,6 +47,8 @@ class bamqc_merger:
         "insert size standard deviation": MEAN,
         "inserted bases": SUM,
         "instrument": ASIS,
+        "lane": ASIS,
+        "library": ASIS,
         "library design": ASIS,
         "mapped reads": SUM,
         "mark duplicates": HIST,
@@ -52,6 +56,7 @@ class bamqc_merger:
         "mean target coverage": MEAN,
         "mismatch by cycle": HIST,
         "mismatched bases": SUM,
+        "mode": ASIS,
         "non primary reads": SUM,
         "number of targets": MAX,
         "package version": ASIS,
@@ -92,6 +97,8 @@ class bamqc_merger:
         "reads on target": SUM,
         "reads per start point": MEAN,
         "readsMissingMDtags": SUM,
+        "run name": ASIS,
+        "sample": ASIS,
         "soft clip bases": SUM,
         "target file": ASIS,
         "target sizes": HIST,
@@ -142,7 +149,8 @@ class bamqc_merger:
                 elif temp_values[1] == 'Total':
                     metrics['READ_PAIRS_EXAMINED'] = int(temp_values[2])
                     metrics['READ_PAIR_DUPLICATES'] = int(temp_values[4])
-                    metrics['PERCENT_DUPLICATION'] = float(temp_values[5])
+                    # make it back-compatible with picard as SamBlaster reports duplication as percent
+                    metrics['PERCENT_DUPLICATION'] = round(float(temp_values[5])/100, self.FINE_PRECISION)
 
         self.report['mark duplicates'] = dict(sorted(metrics.items(), key=lambda item: item[0]))
 
@@ -221,10 +229,6 @@ class bamqc_merger:
                 for metric, value in rep.items():
                     if metric not in self.supported_metrics:
                         continue
-                    ''' Debug '''
-                    if metric == "coverage per target":
-                        print("Found!")
-                    ''' Debug ends '''
                     method = self.supported_metrics[metric]
                     handler = method_dispatch.get(method)
                     if handler:
